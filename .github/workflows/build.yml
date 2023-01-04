@@ -149,6 +149,9 @@ jobs:
           echo "make bundle-build....."
           make bundle-build
 
+          echo "running the scorecard test...."
+          operator-sdk scorecard bundle -w 300s
+
           if [ $DO_PUSH -eq 1 ] ; then
             echo "make docker-push....."
             make docker-push
@@ -176,3 +179,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
+      # Perform a docker logout from ICR.
+      - name: Logout from ICR
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          /usr/bin/docker logout icr.io
