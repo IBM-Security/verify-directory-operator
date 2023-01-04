@@ -43,7 +43,7 @@ jobs:
 
       # Set up the GO cache.
       - name: Use go cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -111,6 +111,18 @@ jobs:
           registry: ${{ secrets.ARTIFACTORY_SERVER  }}
           username: ${{ secrets.ARTIFACTORY_USER    }}
           password: ${{ secrets.ARTIFACTORY_API_KEY }}
+
+      # Installing Kubernetes...
+      - name: Setting up Kubernetes.
+        run: |
+          cd src
+
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.17.0/kind-linux-amd64
+          chmod +x ./kind
+          kind create cluster --wait 5m
+
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          kubectl cluster-info --context kind-kind
 
       # Perform the build.
       - name: Perform the build.
