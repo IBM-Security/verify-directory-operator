@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -24,6 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/kubectl/pkg/scheme"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -72,11 +77,14 @@ type IBMSecurityVerifyDirectoryReconciler struct {
  * - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
  */
 
+
+
 func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 			ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	r.Log.V(9).Info("Entering a function", "Function", "Reconcile")
+	r.Log.V(9).Info("Entering a function", 
+				r.createLogParams(req, "Function", "Reconcile")...)
 
 	/*
 	 * Fetch the definition document.
@@ -99,7 +107,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	  		 * There was an error reading the object - requeue the request.
 			 */
 
-			r.Log.Error(err, "Failed to get the VerifyDirectory resource")
+			r.Log.Error(err, "Failed to get the VerifyDirectory resource",
+					r.createLogParams(req)...)
 		}
 
 		return ctrl.Result{}, err
@@ -116,16 +125,13 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	existing, err := r.getExistingPods(ctx, req)
 
 	if err != nil {
-		r.setCondition(err, ctx, directory, 
+		r.setCondition(err, ctx, req, directory, 
 							"Failed to retrieve the list of existing pods.")
 
 		return ctrl.Result{}, err
 	}
 
-	r.Log.Info("Existing pods", 
-					   	"Deployment.Namespace", req.Namespace,
-			  			"Deployment.Name", req.Name,
-						"Pods", existing)
+	r.Log.Info("Existing pods", r.createLogParams(req, "Pods", existing)...)
 
 	/*
 	 * Work out the list of replicas to be deleted, and the list of
@@ -135,8 +141,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	toBeDeleted, toBeAdded := r.analyseExistingPods(directory, existing)
 
 	r.Log.Info("Updates required",
+		r.createLogParams(req, 
 			"to be deleted", toBeDeleted,
-			"to be added", toBeAdded)
+			"to be added", toBeAdded)...)
 
 	if len(toBeDeleted) == 0 && len(toBeAdded) == 0 {
 		return ctrl.Result{}, nil
@@ -146,10 +153,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	 * Get the port used by the server.
 	 */
 
-	port, secure, err := r.getServerPort(ctx, directory)
+	port, secure, err := r.getServerPort(req, ctx, directory)
 
 	if err != nil {
-		r.setCondition(err, ctx, directory, 
+		r.setCondition(err, ctx, req, directory, 
 			"Failed to obtain the server port information from the ConfigMap.")
 
 		return ctrl.Result{}, err
@@ -163,7 +170,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 					ctx, req, directory, existing, toBeAdded, port, secure)
 
 	if err != nil {
-		r.setCondition(err, ctx, directory, 
+		r.setCondition(err, ctx, req, directory, 
 					"Failed to create the new replicas.")
 
 		return ctrl.Result{}, err
@@ -174,10 +181,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	 * front-end proxy.
 	 */
 
-	err = r.deployProxy(ctx, directory, port, secure)
+	err = r.deployProxy(ctx, req, directory, port, secure)
 
 	if err != nil {
-		r.setCondition(err, ctx, directory, "Failed to deploy the proxy.")
+		r.setCondition(err, ctx, req, directory, "Failed to deploy the proxy.")
 
 		return ctrl.Result{}, err
 	}
@@ -189,7 +196,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	err = r.deleteReplicas(ctx, req, directory, toBeDeleted)
 
 	if err != nil {
-		r.setCondition(err, ctx, directory, 
+		r.setCondition(err, ctx, req, directory, 
 				"Failed to delete the obsolete replicas.")
 
 		return ctrl.Result{}, err
@@ -200,11 +207,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	 * deployment.
 	 */
 
-	r.Log.Info("Reconciled the document",
-								"Deployment.Namespace", req.Namespace,
-								"Deployment.Name", req.Name)
+	r.Log.Info("Reconciled the document", r.createLogParams(req)...) 
 
-	r.setCondition(err, ctx, directory, "")
+	r.setCondition(err, ctx, req, directory, "")
 
 	return ctrl.Result{}, err
 }
@@ -219,8 +224,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteDeployment(
 			ctx context.Context, req ctrl.Request) (err error) {
 
 	r.Log.Info("Deleting a Verify Directory resource",
-				"Namespace", req.Namespace,
-				"Name",      req.Name)
+					r.createLogParams(req)...)
 
 	err = nil
 
@@ -310,7 +314,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 	} else {
 		principal = toBeAdded[0]
 
-		r.Log.Info("Creating the principal replica", "pvc", principal)
+		r.Log.Info("Creating the principal replica", 
+					r.createLogParams(req, "pvc", principal)...)
 
 		/*
 		 * The principal doesn't currently exist and so we need to create
@@ -319,7 +324,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 		var pod string
 
-		pod, err = r.deployReplica(ctx, directory, port, principal)
+		pod, err = r.deployReplica(ctx, req, directory, port, principal)
 
 		if err != nil {
 			return
@@ -347,10 +352,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 		if pvcName != principal {
 			r.Log.Info(
 					"Creating the replication agreement for the new replica", 
-					"pvc", pvcName)
+					r.createLogParams(req, "pvc", pvcName)...)
 
 			err = r.createReplicationAgreement(
-								ctx, directory, port, principal, pvcName)
+								ctx, req, directory, port, principal, pvcName)
 
 			if err != nil {
 				return 
@@ -381,7 +386,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 			 */
 
 			err = r.initializeReplica(
-							ctx, directory, principal, pvcName, existing)
+							ctx, req, directory, principal, pvcName, existing)
 
 			if err != nil {
 				return
@@ -393,7 +398,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 			var pod string
 
-			pod, err = r.deployReplica(ctx, directory, port, pvcName)
+			pod, err = r.deployReplica(ctx, req, directory, port, pvcName)
 
 			if err != nil {
 				return
@@ -430,7 +435,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplicas(
 
 	for idx, pvcName := range toBeDeleted {
 		r.Log.Info("Deleting the replica", 
-							strconv.FormatInt(int64(idx), 10), pvcName)
+			r.createLogParams(req, 
+				strconv.FormatInt(int64(idx), 10), pvcName)...)
 
 		/*
 		 * Ensure that this replica is not the write-master according to the
@@ -488,6 +494,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplicas(
 func (r *IBMSecurityVerifyDirectoryReconciler) setCondition(
 				err      error,
 			  	ctx      context.Context,
+				req      ctrl.Request,
 			 	m        *ibmv1.IBMSecurityVerifyDirectory,
 				msg      string) error {
 
@@ -524,16 +531,13 @@ func (r *IBMSecurityVerifyDirectoryReconciler) setCondition(
 	
 	if err := r.Status().Update(ctx, m); err != nil {
 		r.Log.Error(err, "Failed to update the condition for the resource",
-								"Deployment.Namespace", m.Namespace,
-								"Deployment.Name", m.Name)
+						r.createLogParams(req)...)
 	
 		return err
 	}
 
 	if msg != "" {
-		r.Log.Error(err, msg,
-								"Deployment.Namespace", m.Namespace,
-								"Deployment.Name", m.Name)
+		r.Log.Error(err, msg, r.createLogParams(req)...)
 	}
 
 	return nil
@@ -644,6 +648,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getYamlValue(
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getServerPort(
+			req       ctrl.Request,
 			ctx       context.Context, 
 			directory *ibmv1.IBMSecurityVerifyDirectory) (int32, bool, error) {
 
@@ -726,7 +731,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerPort(
 		}
 	}
 
-	r.Log.Info("Server networking information", "port", port, "is ssl", secure)
+	r.Log.Info("Server networking information", 
+				r.createLogParams(req, "port", port, "is ssl", secure)...)
 
 	return port, secure, nil
 }
@@ -756,8 +762,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getExistingPods(
 
 	if err != nil {
  		r.Log.Error(err, "Failed to retrieve the existing pods",
-								"Deployment.Namespace", req.Namespace,
-								"Deployment.Name", req.Name)
+						r.createLogParams(req)...)
 	} else {
 		for _, pod := range podList.Items {
 			pods[pod.ObjectMeta.Labels[PVCLabel]] = pod.GetName()
@@ -825,6 +830,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) analyseExistingPods(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) initializeReplica(
 			ctx          context.Context, 
+			req          ctrl.Request,
 			directory    *ibmv1.IBMSecurityVerifyDirectory,
 			principalPvc string,
 			replicaPvc   string,
@@ -852,6 +858,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) initializeReplica(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreement(
 			ctx       context.Context, 
+			req       ctrl.Request,
 			directory *ibmv1.IBMSecurityVerifyDirectory,
 			pPort     int32,
 			sourcePvc string,
@@ -917,6 +924,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) isPodReady(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 			ctx        context.Context, 
+			req        ctrl.Request,
 			directory  *ibmv1.IBMSecurityVerifyDirectory,
 			serverPort int32,
 			pvcName    string) (string, error) {
@@ -938,7 +946,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 
 	if err != nil {
 		if ! kerrors.IsNotFound(err) {
-			r.Log.Error(err, "Failed to retrieve the Pod resource")
+			r.Log.Error(err, "Failed to retrieve the Pod resource",
+							r.createLogParams(req)...)
 
 			return "", err
 		}
@@ -1080,15 +1089,14 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 
 	ctrl.SetControllerReference(directory, pod, r.Scheme)
 
-	r.Log.Info("Creating a new pod", "Pod.Namespace",
-								pod.Namespace, "Pod.Name", pod.Name)
+	r.Log.Info("Creating a new pod", 
+						r.createLogParams(req, "Pod.Name", pod.Name)...)
 
 	err = r.Create(ctx, pod)
 
 	if err != nil {
  		r.Log.Error(err, "Failed to create the new pod",
-								"Pod.Namespace", pod.Namespace,
-								"Pod.Name", pod.Name)
+						r.createLogParams(req, "Pod.Name", pod.Name)...)
 
 		return "", err
 	}
@@ -1097,8 +1105,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 	 * Wait for the pod to start.
 	 */
 
-	r.Log.Info("Waiting for the pod to become ready", "Pod.Namespace",
-								pod.Namespace, "Pod.Name", pod.Name)
+	r.Log.Info("Waiting for the pod to become ready", 
+					r.createLogParams(req, "Pod.Name", pod.Name)...)
 
 	err = wait.PollImmediate(time.Second, time.Duration(300) * time.Second, 
 					r.isPodReady(ctx, pod.Namespace, pod.Name))
@@ -1106,8 +1114,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 	if err != nil {
  		r.Log.Error(err, 
 				"The pod failed to become ready within the allocated time.",
-								"Pod.Namespace", pod.Namespace,
-								"Pod.Name", pod.Name)
+				r.createLogParams(req, "Pod.Name", pod.Name)...)
 
 		return "", err
 	}
@@ -1116,7 +1123,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 	 * Create the service for the pod.
 	 */
 
-	err = r.createClusterService(ctx, directory, podName, serverPort, pvcName)
+	err = r.createClusterService(
+					ctx, req, directory, podName, serverPort, pvcName)
 
 	if err != nil {
 		return "", err
@@ -1133,6 +1141,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) deployProxy(
 			ctx        context.Context, 
+			req        ctrl.Request,
 			directory  *ibmv1.IBMSecurityVerifyDirectory,
 			serverPort int32,
 			secure     bool) (error) {
@@ -1157,6 +1166,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployProxy(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 			ctx        context.Context, 
+			req        ctrl.Request,
 			directory  *ibmv1.IBMSecurityVerifyDirectory,
 			podName    string,
 			serverPort int32,
@@ -1191,20 +1201,108 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 	 * Create the service.
 	 */
 
-	r.Log.Info("Creating a new service for the pod", "Pod.Namespace",
-								directory.Namespace, "Pod.Name", podName)
+	r.Log.Info("Creating a new service for the pod", 
+				r.createLogParams(req, "Pod.Name", podName)...)
 
 	err := r.Create(ctx, service)
 
 	if err != nil {
  		r.Log.Error(err, "Failed to create the service for the pod",
-								"Pod.Namespace", directory.Namespace,
-								"Pod.Name", podName)
+				r.createLogParams(req, "Pod.Name", podName)...)
 
 		return err
 	}
 
 	return nil
+}
+
+/*****************************************************************************/
+
+/*
+ * The following function is used to execute a command on the specified
+ * pod.
+ */
+
+func (r *IBMSecurityVerifyDirectoryReconciler) executeCommand(
+				ctx       context.Context, 
+				req       ctrl.Request,
+				namespace string,
+				pod       string,
+				command   []string) error {
+
+	/*
+	 * Create a client which can be used.
+	 */
+
+	kubeConfig := ctrl.GetConfigOrDie()
+	kubeClient := kubernetes.NewForConfigOrDie(kubeConfig)
+
+	/*
+	 * Construct the request.
+	 */
+
+	request := kubeClient.
+		CoreV1().
+		RESTClient().
+		Post().
+		Resource("pods").
+		Namespace(namespace).
+		Name(pod).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   command,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       true,
+		}, scheme.ParameterCodec)
+
+	/*
+	 * Execute the command.
+	 */
+
+	exec, err := remotecommand.NewSPDYExecutor(
+								kubeConfig, "POST", request.URL())
+	if err != nil {
+		r.Log.Error(err, "Failed to execute a command!", 
+				r.createLogParams(req, "command", command)...)
+
+		return err
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	if err := exec.Stream(remotecommand.StreamOptions{
+					Stdout: &stdout, Stderr: &stderr}); err != nil {
+		r.Log.Error(err, "Failed to execute a command!", 
+				r.createLogParams(req, "command", command, 
+					"stdout", stdout.String(), "stderr", stderr.String())...)
+
+		return err
+	}
+
+	return nil
+}
+
+/*****************************************************************************/
+
+/*
+ * This function will create the logging parameters for a request.
+ */
+
+func (r *IBMSecurityVerifyDirectoryReconciler) createLogParams(
+			req ctrl.Request, extras ...interface{}) []interface{} {
+
+	params := []interface{}{
+				"Deployment.Namespace", req.Namespace,
+				"Deployment.Name",      req.Name,
+			}
+
+	for _, extra := range extras {
+		params = append(params, extra)
+	}
+
+	return params
 }
 
 /*****************************************************************************/
