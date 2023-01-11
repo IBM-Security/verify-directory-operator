@@ -966,27 +966,42 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 	 * The volume configuration.
 	 */
 
-	// XXX: PVC
-
-	volumes := []corev1.Volume {{
-		Name: "isvd-server-config",
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: directory.Spec.Pods.ConfigMap.Server.Name,
+	volumes := []corev1.Volume {
+		{
+			Name: "isvd-server-config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: directory.Spec.Pods.ConfigMap.Server.Name,
+					},
+					Items: []corev1.KeyToPath{{
+						Key:  directory.Spec.Pods.ConfigMap.Server.Key,
+						Path: directory.Spec.Pods.ConfigMap.Server.Key,
+					}},
 				},
-				Items: []corev1.KeyToPath{{
-					Key:  directory.Spec.Pods.ConfigMap.Server.Key,
-					Path: directory.Spec.Pods.ConfigMap.Server.Key,
-				}},
 			},
 		},
-	}}
+		{
+			Name: "isvd-data",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcName,
+					ReadOnly:  false,
+				},
+			},
+		},
+	}
 
-	volumeMounts := []corev1.VolumeMount {{
-		Name:      "isvd-server-config",
-		MountPath: "/var/isvd/config",
-	}}
+	volumeMounts := []corev1.VolumeMount {
+		{
+			Name:      "isvd-server-config",
+			MountPath: "/var/isvd/config",
+		},
+		{
+			Name:      "isvd-data",
+			MountPath: "/var/isvd/data",
+		},
+	}
 
 	/*
 	 * Set up the environment variables.
@@ -1081,6 +1096,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 	/*
 	 * Wait for the pod to start.
 	 */
+
+	r.Log.Info("Waiting for the pod to become ready", "Pod.Namespace",
+								pod.Namespace, "Pod.Name", pod.Name)
 
 	err = wait.PollImmediate(time.Second, time.Duration(300) * time.Second, 
 					r.isPodReady(ctx, pod.Namespace, pod.Name))
