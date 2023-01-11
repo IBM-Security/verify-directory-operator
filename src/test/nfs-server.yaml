@@ -1,0 +1,84 @@
+# Copyright contributors to the IBM Security Verify Directory project.
+
+#
+# Create a POD which hosts an NFS server which can then be used to create
+# NFS persistent-volume-claims.
+#
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: nfs-server
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: nfs-server
+    spec:
+      containers:
+      - image: k8s.gcr.io/volume-nfs:0.8
+        imagePullPolicy: IfNotPresent
+        name: nfs-server
+        ports:
+        - containerPort: 2049
+          name: nfs
+          protocol: TCP
+        - containerPort: 20048
+          name: mountd
+          protocol: TCP
+        - containerPort: 111
+          name: rpcbind
+          protocol: TCP
+        resources: {}
+        securityContext:
+          privileged: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /exports
+          name: storage
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir:
+          sizeLimit: 500Mi
+        name: storage
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-service
+spec:
+  ports:
+  - name: nfs
+    port: 2049
+    protocol: TCP
+    targetPort: 2049
+  - name: mountd
+    port: 20048
+    protocol: TCP
+    targetPort: 20048
+  - name: rpcbind
+    port: 111
+    protocol: TCP
+    targetPort: 111
+  selector:
+    app: nfs-server
+  type: ClusterIP
+
