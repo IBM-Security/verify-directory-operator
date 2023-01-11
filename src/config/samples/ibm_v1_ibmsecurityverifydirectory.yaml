@@ -16,10 +16,13 @@ spec:
     - replica-1-pvc
 
   pods:
-    serviceAccountName: isvd 
     image: 
-      repo:    icr.io/isvd
-      label:   latest
+      repo:            icr.io/isvd
+      label:           latest
+      imagePullPolicy: Always
+      imagePullSecrets: 
+      - name: isvd-repo-creds
+
     configMap:
       proxy:   
         name: isvd-proxy-config
@@ -27,4 +30,24 @@ spec:
       server:  
         name: isvd-server-config
         key:  config.yaml
+
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "250m"
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
+
+    envFrom:
+    - configMapRef:
+        name: isvd-env-configmap
+    - secretRef:
+        name: isvd-env-secrets
+
+    env:
+    - name:  dummy-env
+      value: dummy-val
+
+    serviceAccountName: isvd 
 

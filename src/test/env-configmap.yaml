@@ -1,0 +1,12 @@
+# Copyright contributors to the IBM Security Verify Directory Operator project
+
+# This is just a sample ConfigMap which will hold environmental data.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: isvd-env-configmap
+data:
+  APP_NAME: isvd-test
+  APP_ENV: test
+

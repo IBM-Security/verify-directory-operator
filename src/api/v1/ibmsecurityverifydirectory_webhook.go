@@ -75,6 +75,14 @@ var _ webhook.Validator = &IBMSecurityVerifyDirectory{}
 func (r *IBMSecurityVerifyDirectory) ValidateCreate() error {
 	logger.Info("validate create", "name", r.Name)
 
+	/* XXX:
+	 * During the creation operation we need to validate:
+	 *  - the PVCs specified within replicas.pvcs all exist and are unique;
+	 *  - the ConfigMap's specified within pods.configMap exist;
+	 *  - the ConfigMap's and Secrets specified within pods.envFrom all exist;
+	 *  - the proxy ConfigMap does not contain any serverGroups or suffixes;
+	 */
+
 	return nil
 }
 
@@ -87,6 +95,22 @@ func (r *IBMSecurityVerifyDirectory) ValidateCreate() error {
 
 func (r *IBMSecurityVerifyDirectory) ValidateUpdate(old runtime.Object) error {
 	logger.Info("validate update", "name", r.Name)
+
+	/* XXX:
+	 * When updating an existing document we need to:
+	 *   - Ensure that nothing within the pods entry has changed.  The only 
+	 *     thing which we support editing is the number of replicas.
+	 *   - Ensure that all existing pods for this deployment are currently
+	 *     available and reachable.  This is achieved with the following
+	 *     logic:
+	 *       retrieve the list of existing pods
+	 *       for each located pod:
+	 *         if the pod is not available and is not being deleted:
+	 *           return an error
+	 *         if the pod is being deleted and has been currently set as the \
+	 *         write master by the proxy:
+	 *           return an error
+	 */
 
 	return nil
 }
