@@ -13,7 +13,9 @@ metadata:
 spec:
   replicas:
     pvcs: 
-    - replica-1-pvc
+    - replica-1
+    - replica-2
+    - replica-3
 
   pods:
     image: 
