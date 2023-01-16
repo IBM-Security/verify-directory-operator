@@ -310,3 +310,8 @@ catalog-cleanup:
 	sed "s|--catalog-img--|$(CATALOG_IMG)|g" test/catalog.yaml \
             | kubectl delete -f -
 
+.PHONY: certs
+certs:
+	mkdir -p /tmp/k8s-webhook-server/serving-certs
+	cp test/certs/* /tmp/k8s-webhook-server/serving-certs/
+

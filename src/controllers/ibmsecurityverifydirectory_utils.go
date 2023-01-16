@@ -65,6 +65,30 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getSeedConfigMapName(
 /*****************************************************************************/
 
 /*
+ * The following function is used to generate the ConfigMap name for the 
+ * proxy deployment.
+ */
+
+func (r *IBMSecurityVerifyDirectoryReconciler) getProxyConfigMapName(
+			directory  *ibmv1.IBMSecurityVerifyDirectory) (string) {
+	return strings.ToLower(fmt.Sprintf("%s-proxy", directory.Name))
+}
+
+/*****************************************************************************/
+
+/*
+ * The following function is used to generate the deployment name for the 
+ * proxy deployment.
+ */
+
+func (r *IBMSecurityVerifyDirectoryReconciler) getProxyDeploymentName(
+			directory  *ibmv1.IBMSecurityVerifyDirectory) (string) {
+	return strings.ToLower(fmt.Sprintf("%s-proxy", directory.Name))
+}
+
+/*****************************************************************************/
+
+/*
  * The following function will create the name of the job which is used to
  * seed the replica.
  */
@@ -85,6 +109,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getSeedJobName(
 func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 			h            *RequestHandle,
 			mapName      string,
+			exists       bool,
 			key          string,
 			value        string) (err error) {
 
@@ -99,16 +124,30 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 		},
 	}
 
-	r.Log.Info("Creating a new ConfigMap", 
+	if exists {
+		r.Log.Info("Updating an existing ConfigMap", 
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
-	err = r.Create(h.ctx, configMap)
+		err = r.Update(h.ctx, configMap)
 
-	if err != nil {
- 		r.Log.Error(err, "Failed to create the new ConfigMap",
+		if err != nil {
+			r.Log.Error(err, "Failed to update the ConfigMap",
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
-		return
+			return
+		}
+	} else {
+		r.Log.Info("Creating a new ConfigMap", 
+						r.createLogParams(h, "ConfigMap.Name", mapName)...)
+
+		err = r.Create(h.ctx, configMap)
+
+		if err != nil {
+			r.Log.Error(err, "Failed to create the new ConfigMap",
+						r.createLogParams(h, "ConfigMap.Name", mapName)...)
+
+			return
+		}
 	}
 
 	return

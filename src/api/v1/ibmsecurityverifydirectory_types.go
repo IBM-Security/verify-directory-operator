@@ -55,7 +55,14 @@ type IBMSecurityVerifyDirectoryImage struct {
     ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,15,rep,name=imagePullSecrets"`
 }
 
-// IBMSecurityVerifyDirectoryConfigMapEntry defines the information required
+// IBMSecurityVerifyDirectoryProxy defines the details associated with the
+// proxy which will be created by the operator.
+type IBMSecurityVerifyDirectoryProxy struct {
+	// The name of the PVC which will be used by the proxy.
+	// +optional
+	PVC string `json:"pvc"`
+}
+
 // for a ConfigMap configuration.
 type IBMSecurityVerifyDirectoryConfigMapEntry struct {
 	// The name of the ConfigMap which contains the configuration data.
@@ -85,6 +92,9 @@ type IBMSecurityVerifyDirectoryPods struct {
 	// Details associated with the docker images used by the operator.
 	// +optional
 	Image IBMSecurityVerifyDirectoryImage `json:"image,omitempty"`
+
+	// +optional
+	Proxy IBMSecurityVerifyDirectoryProxy `json:"proxy,omitempty"`
 
 	// The configuration details for the proxy and server.
 	ConfigMap IBMSecurityVerifyDirectoryConfigMap `json:"configMap"`

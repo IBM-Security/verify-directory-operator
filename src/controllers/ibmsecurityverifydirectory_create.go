@@ -147,7 +147,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 	seedConfigMapName := r.getSeedConfigMapName(h.directory)
 
-	err = r.createConfigMap(h, seedConfigMapName, 
+	err = r.createConfigMap(h, seedConfigMapName, false,
 			ConfigMapKey, "seed: \n  replica: \n    clean: true\n")
 
 	if err != nil {

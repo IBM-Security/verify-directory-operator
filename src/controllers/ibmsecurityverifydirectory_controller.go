@@ -192,8 +192,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	 * Create the new replicas.
 	 */
 
-	existing, err = r.createReplicas(
-					&h, existing, toBeAdded, port, secure, licenseKey)
+	existing, err = r.createReplicas(&h, existing, toBeAdded)
 
 	if err != nil {
 		r.setCondition(err, &h,

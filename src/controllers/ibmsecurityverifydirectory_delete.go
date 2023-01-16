@@ -14,9 +14,10 @@ package controllers
 /*****************************************************************************/
 
 import (
-	metav1  "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1  "k8s.io/api/core/v1"
+	appsv1  "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1  "k8s.io/api/core/v1"
+	metav1  "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"strconv"
 	"time"
@@ -52,6 +53,18 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteDeployment(
 	service := &corev1.Service{}
 
 	err = r.DeleteAllOf(h.ctx, service, opts...)
+
+	if err != nil {
+		return 
+	}
+
+	/*
+	 * Delete all of the deployments for the deployment.
+	 */
+
+	deployment := &appsv1.Deployment{}
+
+	err = r.DeleteAllOf(h.ctx, deployment, opts...)
 
 	if err != nil {
 		return 
@@ -132,13 +145,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplicas(
 		r.Log.Info("Deleting the replica", 
 			r.createLogParams(h, 
 				strconv.FormatInt(int64(idx), 10), pvcName)...)
-
-		/*
-		 * Ensure that this replica is not the write-master according to the
-		 * proxy.
-		 */
-
-		// XXX: Proxy
 
 		/*
 		 * Remove the replication agreement from each of the existing

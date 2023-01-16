@@ -25,6 +25,9 @@ spec:
       imagePullSecrets: 
       - name: isvd-repo-creds
 
+    proxy:
+      pvc: proxy
+
     configMap:
       proxy:   
         name: isvd-proxy-config

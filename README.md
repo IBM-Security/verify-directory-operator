@@ -300,6 +300,7 @@ The `IBMSecurityVerifyDirectory` custom resource definition contains the followi
 |spec.pods.image.label|The label of the Verify Directory images to be used. |latest|No
 |spec.pods.image.imagePullPolicy|The pull policy for the images.|'Always' if the latest label is specified, otherwise 'IfNotPresent'.|No
 |spec.pods.image.imagePullSecrets[]|A list of secrets which contain the credentials, used to access the images.| |No
+|spec.pods.proxy.pvc|The name of the pre-created PVC which will be used by the proxy to persist runtime data.  This is only really required if schema updates are being applied using LDAP modification operations.| |No
 |spec.pods.configMap.proxy.name spec.pods.configMap.proxy.key|The name and key of the ConfigMap which contains the initial configuration data for the proxy.  This should include everything but the proxy.server-groups and proxy.suffixes entries.| |Yes
 |spec.pods.configMap.server.name spec.pods.configMap.server.key|The name and key of the ConfigMap which contains the configuration data for the server which is being managed/replicated.| |Yes
 |spec.pods.resources|The compute resources required by each pod.  Further information can be found at [https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/]().| |No
@@ -312,7 +313,7 @@ The `IBMSecurityVerifyDirectory` custom resource definition contains the followi
 
 ### Creating a Service
 
-When creating a service for the environment the selector for the service must match the selector for the proxy deployment, achieved by specifying the `app` label.  
+When creating a service for the environment the selector for the service must match the selector for the proxy deployment, achieved by specifying the `app.kubernetes.io/kind` and `app.kubernetes.io/cr-name` labels.  
 
 An example NodePort service definition is provided below:
 
@@ -328,7 +329,8 @@ spec:
       protocol: TCP
       nodePort: 30443
   selector:
-    app: isvd-server
+    app.kubernetes.io/kind: IBMSecurityVerifyDirectory
+    app.kubernetes.io/cr-name: isvd-server
   type: NodePort
 ```
 

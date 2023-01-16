@@ -1,0 +1,26 @@
+# Copyright contributors to the IBM Security Verify Directory project.
+
+#
+# Create the service for the proxy.
+#
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: isvd-proxy
+
+spec:
+  ports:
+  - port: 9389
+    targetPort: 9389
+    nodePort: 30389
+    name: isvd-proxy-ldap
+    protocol: TCP
+
+  selector:
+    app.kubernetes.io/kind: IBMSecurityVerifyDirectory
+    app.kubernetes.io/cr-name: ibmsecurityverifydirectory-sample-proxy
+
+  type: NodePort
+
