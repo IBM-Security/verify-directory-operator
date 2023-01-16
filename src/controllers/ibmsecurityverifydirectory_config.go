@@ -108,7 +108,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getYamlValue(
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
-			h *RequestHandle) (int32, bool, string, error) {
+			h *RequestHandle) (error) {
 
 	/*
 	 * Retrieve the ConfigMap which contains the server configuration.
@@ -123,7 +123,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 			config)
 
 	if err != nil {
-		return 0, false, "", err
+		return err
 	}
 
 	/*
@@ -136,7 +136,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
     var body interface{}
     if err := yaml.Unmarshal([]byte(config.Data[key]), &body); err != nil {
 		h.requeueOnError = false
-		return 0, false, "", err
+		return err
     }
 
 	body      = r.convertYaml(body)
@@ -145,16 +145,15 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	if ! ok {
 		h.requeueOnError = false
 		
-		return 0, false, "", errors.New(
-			"The server configuration cannot be parsed.")
+		return errors.New("The server configuration cannot be parsed.")
 	}
 
 	/*
 	 * Retrieve the general.ports.ldap configuration data.  
 	 */
 
-	var port   int32 = 9389
-	var secure bool  = false
+	h.config.port   = 9389
+	h.config.secure = false
 
 	ldap := r.getYamlValue(body, []string{"general","ports","ldap"})
 
@@ -164,20 +163,20 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 		if ! ok {
 			h.requeueOnError = false
 
-			return 0, false, "", errors.New(
+			return errors.New(
 						"The general.ports.ldap configuration is incorrect.")
 		}
 
-		port = int32(iport)
+		h.config.port = int32(iport)
 
-		if port == 0 {
+		if h.config.port == 0 {
 			/*
 			 * If the port is 0 it means that it has not been activated and
 			 * so we need to use the ldaps port.
 			 */
 
-			secure = true
-			port   = 9636
+			h.config.secure = true
+			h.config.port   = 9636
 
 			ldaps := r.getYamlValue(body, []string{"general","ports","ldaps"})
 
@@ -187,11 +186,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 				if ! ok {
 					h.requeueOnError = false
 
-					return 0, false, "", errors.New(
+					return errors.New(
 						"The general.ports.ldaps configuration is incorrect.")
 				}
 
-				port = int32(iport)
+				h.config.port = int32(iport)
 			}
 		}
 	}
@@ -200,21 +199,119 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the license key information.
 	 */
 
-	license := r.getYamlValue(body, []string{"general","license","key"})
+	licenseKey := r.getYamlValue(body, []string{"general","license","key"})
 
-	if license == nil {
+	if licenseKey == nil {
 		h.requeueOnError = false
 
-		return 0, false, "", errors.New(
-						"The general.license.key configuration is missing.")
+		return errors.New("The general.license.key configuration is missing.")
 	}
 
+	h.config.licenseKey = licenseKey.(string)
+
+	/*
+	 * Retrieve the admin DN.
+	 */
+
+	adminDn := r.getYamlValue(body, []string{"general","admin","dn"})
+
+	if adminDn == nil {
+		h.config.adminDn = "cn=root"
+	} else {
+		h.config.adminDn = adminDn.(string)
+	}
+
+	/*
+	 * Retrieve the admin password.
+	 */
+
+	adminPwd := r.getYamlValue(body, []string{"general","admin","pwd"})
+
+	if adminPwd == nil {
+		h.requeueOnError = false
+
+		return errors.New("The general.admin.pwd configuration is missing.")
+	}
+
+	h.config.adminPwd = adminPwd.(string)
+
+	/*
+	 * Retrieve the suffixes which are to be managed.  This is a little bit
+	 * more complicated than the standard configuration entries as we need to
+	 * extract each of the dn's from the suffixes entry.
+	 */
+
+	h.config.suffixes, err = r.getConfigSuffixes(body)
+
+	if err != nil {
+		h.requeueOnError = false
+
+		return err
+	}
 
 	r.Log.Info("Server configuration information", 
-				r.createLogParams(h, "port", port, "is ssl", secure, 
-							"license.key", license)...)
+				r.createLogParams(h, "port", h.config.port, 
+							"is ssl", h.config.secure, 
+							"license.key", h.config.licenseKey,
+							"admin.dn", h.config.adminDn,
+							"admin.pwd", "XXX",
+							"suffixes", h.config.suffixes)...)
 
-	return port, secure, license.(string), nil
+	return nil
+}
+
+/*****************************************************************************/
+
+/*
+ * Retrieve the suffixes which are being managed.  We need to extract each
+ * of the DN values from the general.server.suffixes entry.
+ */
+
+func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
+					body interface{}) ([]string, error) {
+	var suffixes []string
+
+	entries := r.getYamlValue(body, []string{"server","suffixes"})
+
+	if entries == nil {
+		return nil, errors.New("The server.suffixes configuration is missing.")
+	}
+
+	/*
+	 * The first thing to do is cast the yaml to the correct type.
+	 */
+
+	suffixEntries, ok := entries.([]interface{}) 
+
+	if !ok {
+		return nil, errors.New(
+						"The server.suffixes configuration is incorrect.")
+	}
+
+	/*
+	 * Now we should iterate over the suffix entries, grabbing the DN value
+	 * for each entry.
+	 */
+
+	for _, entry := range suffixEntries {
+		suffixEntry, ok := entry.(map[string]interface{}) 
+
+		if !ok {
+			return nil, errors.New(
+						"The server.suffixes configuration is incorrect.")
+		}
+
+		dn := r.getYamlValue(suffixEntry, []string{"dn"})
+
+		if !ok {
+			return nil, errors.New(
+						"The server.suffixes configuration is incorrect.")
+		}
+
+		suffixes = append(suffixes, dn.(string))
+	}
+
+	return suffixes, nil
 }
 
 /*****************************************************************************/

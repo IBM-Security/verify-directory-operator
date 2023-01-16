@@ -58,6 +58,20 @@ type IBMSecurityVerifyDirectoryReconciler struct {
 /*****************************************************************************/
 
 /*
+ * The following structure contains the server configuration which is required
+ * by the operator.
+ */
+
+type ServerConfig struct {
+	port       int32
+	secure     bool
+	licenseKey string
+	adminDn    string
+	adminPwd   string
+	suffixes   []string
+}
+
+/*
  * The following structure is used to define a request handle for the operator.
  * The request handle will contain the information which is common across a
  * single request.
@@ -68,6 +82,7 @@ type RequestHandle struct {
 	req            ctrl.Request
 	directory      *ibmv1.IBMSecurityVerifyDirectory
 	requeueOnError bool
+	config         ServerConfig
 }
 
 /*****************************************************************************/
@@ -164,7 +179,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	 * Get the configuration to be used by the server.
 	 */
 
-	port, secure, licenseKey, err := r.getServerConfig(&h)
+	err = r.getServerConfig(&h)
 
 	if err != nil {
 		r.setCondition(err, &h,
@@ -192,7 +207,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	 * front-end proxy.
 	 */
 
-	err = r.deployProxy(&h, port, secure)
+	err = r.deployProxy(&h)
 
 	if err != nil {
 		r.setCondition(err, &h, "Failed to deploy the proxy.")

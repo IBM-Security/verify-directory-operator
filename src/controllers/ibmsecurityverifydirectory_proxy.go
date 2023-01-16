@@ -23,9 +23,7 @@ import (
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) deployProxy(
-			h          *RequestHandle,
-			serverPort int32,
-			secure     bool) (error) {
+			h          *RequestHandle) (error) {
 
 	/*
 	 * Processing:

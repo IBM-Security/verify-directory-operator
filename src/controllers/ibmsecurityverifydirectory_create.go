@@ -33,10 +33,7 @@ import (
 func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 			h          *RequestHandle,
 			existing   map[string]string,
-			toBeAdded  []string,
-			port       int32,
-			secure     bool,
-			licenseKey string) (map[string]string, error) {
+			toBeAdded  []string) (map[string]string, error) {
 
 	var err error = nil
 
@@ -76,7 +73,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 		var pod string
 
-		pod, err = r.deployReplica(h, port, principal)
+		pod, err = r.deployReplica(h, principal)
 
 		if err != nil {
 			h.requeueOnError = false
@@ -84,7 +81,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 			return nil, err
 		}
 
-		err = r.createClusterService(h, pod, port, principal)
+		err = r.createClusterService(h, pod, h.config.port, principal)
 
 		if err != nil {
 			h.requeueOnError = false
@@ -119,7 +116,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 	for _, pvcName := range toBeAdded {
 		err = r.createReplicationAgreement(
-					h, port, secure, principal, principal, pvcName)
+					h, principal, principal, pvcName)
 
 		if err != nil {
 			h.requeueOnError = false
@@ -165,7 +162,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 	 */
 
 	for _, pvcName := range toBeAdded {
-		err = r.seedReplica(h, licenseKey, principal, pvcName)
+		err = r.seedReplica(h, principal, pvcName)
 
 		if err != nil {
 			h.requeueOnError = false
@@ -213,7 +210,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 	for _, pvcName := range toBeAdded {
 		var podName string
 
-		podName, err = r.deployReplica(h, port, pvcName)
+		podName, err = r.deployReplica(h, pvcName)
 
 		if err != nil {
 			h.requeueOnError = false
@@ -241,8 +238,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 	 */
 
 	for _, pvcName := range toBeAdded {
-		err = r.createReplicationAgreements(
-				h, port, secure, licenseKey, principal, pvcName, existing)
+		err = r.createReplicationAgreements(h, principal, pvcName, existing)
 
 		if err != nil {
 			h.requeueOnError = false
@@ -256,7 +252,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 	 */
 
 	for pvcName, podName:= range replicaPods {
-		err = r.createClusterService(h, podName, port, pvcName)
+		err = r.createClusterService(h, podName, h.config.port, pvcName)
 
 		if err != nil {
 			h.requeueOnError = false
@@ -269,7 +265,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 	 * Start the principal.
 	 */
 
-	principalPod, err := r.deployReplica(h, port, principal)
+	principalPod, err := r.deployReplica(h, principal)
 
 	if err != nil {
 		h.requeueOnError = false
@@ -277,7 +273,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 		return nil, err
 	}
 
-	err = r.createClusterService(h, principalPod, port, principal)
+	err = r.createClusterService(h, principalPod, h.config.port, principal)
 
 	if err != nil {
 		h.requeueOnError = false
@@ -305,7 +301,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 			h            *RequestHandle,
-			licenseKey   string,
 			principalPvc string,
 			replicaPvc   string) (err error) {
 
@@ -385,7 +380,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 		},
 		corev1.EnvVar {
 		   	Name: "general.license.key",
-			Value: licenseKey,
+			Value: h.config.licenseKey,
 		},
 		corev1.EnvVar {
 		   	Name: "YAML_CONFIG_FILE",
@@ -453,9 +448,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreements(
 			h            *RequestHandle,
-			port         int32,
-			secure       bool,
-			licenseKey   string,
 			principalPvc string,
 			replicaPvc   string,
 			existing     map[string]string) (err error) {
@@ -467,7 +459,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreements(
 	for pvcName, _ := range existing {
 		if pvcName != principalPvc && pvcName != replicaPvc {
 			err = r.createReplicationAgreement(
-					h, port, secure, principalPvc, pvcName, replicaPvc)
+					h, principalPvc, pvcName, replicaPvc)
 
 			if err != nil {
 				return
@@ -486,8 +478,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreements(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreement(
 			h            *RequestHandle, 
-			port         int32,
-			secure       bool,
 			principalPvc string,
 			sourcePvc    string,
 			destPvc      string) (error) {
@@ -500,7 +490,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreement(
 	srcPod        := r.getReplicaPodName(h.directory, sourcePvc)
 	dstPod        := r.getReplicaPodName(h.directory, destPvc)
 	command       := []string{"isvd_manage_replica"}
-	portStr       := strconv.Itoa(int(port))
+	portStr       := strconv.Itoa(int(h.config.port))
 
 	/*
 	 * Let's play it safe and delete any pre-existing replication agreement
@@ -529,7 +519,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreement(
 			"-s", principalPod)
 	}
 
-	if secure {
+	if h.config.secure {
 		command = append(command, "-z")
 	}
 
@@ -543,9 +533,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreement(
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
-			h          *RequestHandle,
-			serverPort int32,
-			pvcName    string) (string, error) {
+			h       *RequestHandle,
+			pvcName string) (string, error) {
 
 	podName := r.getReplicaPodName(h.directory, pvcName)
 
@@ -559,7 +548,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 
 	ports := []corev1.ContainerPort {{
 		Name:          "ldap",
-		ContainerPort: serverPort,
+		ContainerPort: h.config.port,
 		Protocol:      corev1.ProtocolTCP,
 	}}
 
