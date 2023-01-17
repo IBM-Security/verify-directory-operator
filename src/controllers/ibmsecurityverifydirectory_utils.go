@@ -25,8 +25,6 @@ import (
 	"strings"
 	"time"
 
-	ctrl  "sigs.k8s.io/controller-runtime"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,6 +32,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	ibmv1 "github.com/ibm-security/verify-directory-operator/api/v1"
 )
@@ -125,6 +125,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 	}
 
 	if exists {
+		ctrl.SetControllerReference(h.directory, configMap, r.Scheme)
+
 		r.Log.Info("Updating an existing ConfigMap", 
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
@@ -137,6 +139,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 			return
 		}
 	} else {
+		ctrl.SetControllerReference(h.directory, configMap, r.Scheme)
+
 		r.Log.Info("Creating a new ConfigMap", 
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
@@ -152,6 +156,36 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 
 	return
 }
+
+/*****************************************************************************/
+
+/*
+ * The following function is used to delete the specified config map.
+ */
+
+func (r *IBMSecurityVerifyDirectoryReconciler) deleteConfigMap(
+			h            *RequestHandle,
+			mapName      string) (err error) {
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mapName,
+			Namespace: h.directory.Namespace,
+			Labels:    r.labelsForApp(h.directory.Name, mapName),
+		},
+	}
+
+	err = r.Delete(h.ctx, configMap)
+
+	if err != nil {
+		h.requeueOnError = false
+
+		return 
+	}
+
+	return
+}
+
 
 /*****************************************************************************/
 
@@ -338,6 +372,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 			}},
 		},
 	}
+
+	ctrl.SetControllerReference(h.directory, service, r.Scheme)
 
 	/*
 	 * Create the service.

@@ -98,6 +98,8 @@ func (r *IBMSecurityVerifyDirectory) ValidateUpdate(old runtime.Object) error {
 
 	/* XXX:
 	 * When updating an existing document we need to:
+	 *   - Ensure that the deployment is not in the failing state.  If in a
+	 *     failing state we must delete the deployment first.
 	 *   - Ensure that nothing within the pods entry has changed.  The only 
 	 *     thing which we support editing is the number of replicas.
 	 *   - Ensure that all existing pods for this deployment are currently

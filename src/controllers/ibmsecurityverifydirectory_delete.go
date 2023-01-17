@@ -14,8 +14,6 @@ package controllers
 /*****************************************************************************/
 
 import (
-	appsv1  "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1  "k8s.io/api/core/v1"
 	metav1  "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -23,96 +21,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-/*****************************************************************************/
-
-/*
- * Delete a server from the environment.
- */
-
-func (r *IBMSecurityVerifyDirectoryReconciler) deleteDeployment(
-			h *RequestHandle) (err error) {
-
-	r.Log.Info("Deleting a Verify Directory resource",
-					r.createLogParams(h)...)
-
-	err = nil
-
-	opts    := []client.DeleteAllOfOption{
-		client.InNamespace(h.req.Namespace),
-		client.MatchingLabels(r.labelsForApp(h.req.Name, "")),
-	}
-
-	/*
-	 * Delete all of the services for the deployment.
-	 */
-
-	service := &corev1.Service{}
-
-	err = r.DeleteAllOf(h.ctx, service, opts...)
-
-	if err != nil {
-		return 
-	}
-
-	/*
-	 * Delete all of the deployments for the deployment.
-	 */
-
-	deployment := &appsv1.Deployment{}
-
-	err = r.DeleteAllOf(h.ctx, deployment, opts...)
-
-	if err != nil {
-		return 
-	}
-
-	/*
-	 * Delete all of the pods for the deployment.
-	 */
-
-	pod := &corev1.Pod{}
-
-	err = r.DeleteAllOf(h.ctx, pod, opts...)
-
-	if err != nil {
-		return 
-	}
-
-	/*
-	 * Delete all of the Jobs for the deployment.
-	 */
-
-	job     := &batchv1.Job{}
-	jobOpts := []client.DeleteAllOfOption{
-		client.InNamespace(h.req.Namespace),
-		client.MatchingLabels(r.labelsForApp(h.req.Name, "")),
-		client.PropagationPolicy(metav1.DeletePropagationBackground),
-	}
-
-	err = r.DeleteAllOf(h.ctx, job, jobOpts...)
-
-	if err != nil {
-		return 
-	}
-
-	/*
-	 * Delete all of the ConfigMaps for the deployment.
-	 */
-
-	configMap := &corev1.ConfigMap{}
-
-	err = r.DeleteAllOf(h.ctx, configMap, opts...)
-
-	if err != nil {
-		return 
-	}
-
-	return
-}
 
 /*****************************************************************************/
 
@@ -184,18 +93,21 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 			pvcName    string,
 			waitOnPod  bool) (err error)  {
 
-	opts := []client.DeleteAllOfOption{
-		client.InNamespace(h.req.Namespace),
-		client.MatchingLabels(r.labelsForApp(h.req.Name, pvcName)),
-	}
+	podName := r.getReplicaPodName(h.directory, pvcName)
 
 	/*
 	 * Delete the service.
 	 */
 
-	service := &corev1.Service{}
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: h.directory.Namespace,
+			Labels:    r.labelsForApp(h.directory.Name, pvcName),
+		},
+	}
 
-	err = r.DeleteAllOf(h.ctx, service, opts...)
+	err = r.Delete(h.ctx, service)
 
 	if err != nil {
 		return 
@@ -205,9 +117,15 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 	 * Delete the pod.
 	 */
 
-	pod := &corev1.Pod{}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: h.directory.Namespace,
+			Labels:    r.labelsForApp(h.directory.Name, pvcName),
+		},
+	}
 
-	err = r.DeleteAllOf(h.ctx, pod, opts...)
+	err = r.Delete(h.ctx, pod)
 
 	if err != nil {
 		return 
@@ -217,8 +135,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 		/*
 		 * Wait for the pod to stop.
 		 */
-
-		podName := r.getReplicaPodName(h.directory, pvcName)
 
 		r.Log.Info("Waiting for the pod to stop", 
 					r.createLogParams(h, "Pod.Name", podName)...)

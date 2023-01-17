@@ -27,9 +27,12 @@ import (
 	"github.com/go-yaml/yaml"
 
 	k8syaml "sigs.k8s.io/yaml"
+	ctrl    "sigs.k8s.io/controller-runtime"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -663,8 +666,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 		}
 
 		/*
-		 * Create the pod.
+		 * Create the deployment.
 		 */
+
+		ctrl.SetControllerReference(h.directory, dep, r.Scheme)
 
 		r.Log.Info("Creating a new proxy deployment", 
 						r.createLogParams(h, "Deployment.Name", dep.Name)...)

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 /*****************************************************************************/
@@ -167,6 +167,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 		if err != nil {
 			h.requeueOnError = false
 
+			r.deleteConfigMap(h, seedConfigMapName)
+
 			return nil, err
 		}
 	}
@@ -177,6 +179,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 		if err != nil {
 			h.requeueOnError = false
 
+			r.deleteConfigMap(h, seedConfigMapName)
+
 			return nil, err
 		}
 	}
@@ -185,20 +189,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 	 * Delete the temporary ConfigMap which was created.
 	 */
 
-	configMap := &corev1.ConfigMap{}
-	opts      := []client.DeleteAllOfOption{
-		client.InNamespace(h.req.Namespace),
-		client.MatchingLabels(
-				r.labelsForApp(h.req.Name, seedConfigMapName)),
-	}
-
-	err = r.DeleteAllOf(h.ctx, configMap, opts...)
-
-	if err != nil {
-		h.requeueOnError = false
-
-		return nil, err
-	}
+	r.deleteConfigMap(h, seedConfigMapName)
 
 	/*
 	 * Now that the PVCs have been seeded with initial data we can now
@@ -423,6 +414,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 			},
 		},
 	}
+
+	ctrl.SetControllerReference(h.directory, job, r.Scheme)
 
 	r.Log.Info("Creating a new seed job", 
 						r.createLogParams(h, "Job.Name", job.Name)...)
@@ -663,6 +656,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 			}},
 		},
 	}
+
+	ctrl.SetControllerReference(h.directory, pod, r.Scheme)
 
 	/*
 	 * Create the pod.

@@ -13,10 +13,10 @@ import (
 	corev1  "k8s.io/api/core/v1"
 
 	"context"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/api/meta"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -54,12 +54,12 @@ type IBMSecurityVerifyDirectoryReconciler struct {
 //+kubebuilder:rbac:groups=ibm.com,resources=ibmsecurityverifydirectories,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=ibm.com,resources=ibmsecurityverifydirectories/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ibm.com,resources=ibmsecurityverifydirectories/finalizers,verbs=update
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete;deletecollection
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;delete;deletecollection
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
-//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete;deletecollection
-//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete;deletecollection
-//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;delete;deletecollection
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;delete
 
 /*****************************************************************************/
 
@@ -133,7 +133,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 			 * been deleted.
   			 */
 
-			err = r.deleteDeployment(&h)
+			r.Log.Info("Resource not found due to it having been deleted", 
+								r.createLogParams(&h)...)
+
+			err = nil
 		} else {
 			/*
 	  		 * There was an error reading the object - requeue the request.
@@ -273,37 +276,27 @@ func (r *IBMSecurityVerifyDirectoryReconciler) setCondition(
 				h   *RequestHandle,
 				msg string) error {
 
-	var condReason  string
-	var condMessage string
-	
+	condition := metav1.Condition{
+		Type: "Available",
+	}
+
 	if h.directory.Generation == 1 {
-		condReason  = "DeploymentCreated"
-		condMessage = "The deployment has been created."
+		condition.Reason  = "DeploymentCreated"
+		condition.Message = "The deployment has been created."
 	} else {
-		condReason  = "DeploymentUpdated"
-		condMessage = "The deployment has been updated."
+		condition.Reason  = "DeploymentUpdated"
+		condition.Message = "The deployment has been updated."
 	}
-	
-	currentTime := metav1.NewTime(time.Now())
-	
-	if err == nil {
-		h.directory.Status.Conditions = []metav1.Condition{{
-			Type:               "Available",
-			Status:             metav1.ConditionTrue,
-			Reason:             condReason,
-			Message:            condMessage,
-			LastTransitionTime: currentTime,
-		}}
+
+	if err != nil {
+		condition.Message = err.Error()
+		condition.Status  = metav1.ConditionFalse
 	} else {
-		h.directory.Status.Conditions = []metav1.Condition{{
-			Type:               "Available",
-			Status:             metav1.ConditionFalse,
-			Reason:             condReason,
-			Message:            err.Error(),
-			LastTransitionTime: currentTime,
-		}}
+		condition.Status  = metav1.ConditionTrue
 	}
-	
+
+	meta.SetStatusCondition(&h.directory.Status.Conditions, condition)
+
 	if err := r.Status().Update(h.ctx, h.directory); err != nil {
 		r.Log.Error(err, "Failed to update the condition for the resource",
 						r.createLogParams(h)...)
