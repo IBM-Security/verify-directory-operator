@@ -104,7 +104,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 		 * return now.
 		 */
 
-		if len(toBeAdded) == 1 {
+		if len(toBeAdded) == 0 {
 			return existing, err
 		}
 	}

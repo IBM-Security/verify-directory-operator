@@ -54,6 +54,12 @@ type IBMSecurityVerifyDirectoryReconciler struct {
 //+kubebuilder:rbac:groups=ibm.com,resources=ibmsecurityverifydirectories,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=ibm.com,resources=ibmsecurityverifydirectories/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ibm.com,resources=ibmsecurityverifydirectories/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete;deletecollection
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;delete;deletecollection
+//+kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete;deletecollection
+//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete;deletecollection
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;delete;deletecollection
 
 /*****************************************************************************/
 

@@ -1,0 +1,56 @@
+# Copyright contributors to the IBM Security Verify Directory Operator project
+
+apiVersion: ibm.com/v1
+kind: IBMSecurityVerifyDirectory
+metadata:
+  labels:
+    app.kubernetes.io/name: ibmsecurityverifydirectory
+    app.kubernetes.io/instance: ibmsecurityverifydirectory-sample
+    app.kubernetes.io/part-of: verify-directory
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: verify-directory-operator
+  name: ibmsecurityverifydirectory-sample
+spec:
+  replicas:
+    pvcs: 
+    - replica-1
+    - replica-2
+
+  pods:
+    image: 
+      repo:            icr.io/isvd
+      label:           latest
+      imagePullSecrets: 
+      - name: isvd-repo-creds
+
+    proxy:
+      pvc: proxy
+
+    configMap:
+      proxy:   
+        name: isvd-proxy-config
+        key:  config.yaml
+      server:  
+        name: isvd-server-config
+        key:  config.yaml
+
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "250m"
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
+
+    envFrom:
+    - configMapRef:
+        name: isvd-env-configmap
+    - secretRef:
+        name: isvd-env-secrets
+
+    env:
+    - name:  dummy-env
+      value: dummy-val
+
+    serviceAccountName: isvd 
+
