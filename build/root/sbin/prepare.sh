@@ -137,7 +137,7 @@ To tidy up the CRD's you can perform an uninstall using the following command:
 
 In order to deploy the image, using OLM, to a Kubernetes environment:
     1. operator-sdk olm install
-    2. operator-sdk run bundle sec-isds-development-team-docker-local.artifactory.swg-devops.com/verify-directory-operator-bundle:\${VERSION} --pull-secret-name artifactory-login
+    2. operator-sdk run bundle \${IMAGE_TAG_BASE}-operator-bundle:\${VERSION} --pull-secret-name artifactory-login
 
 In order to cleanup the Kubernetes environment:
     1. operator-sdk cleanup ibm-security-verify-directory-operator

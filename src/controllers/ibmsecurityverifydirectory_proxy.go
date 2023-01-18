@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/go-yaml/yaml"
+	"github.com/ibm-security/verify-directory-operator/utils"
 
 	k8syaml "sigs.k8s.io/yaml"
 	ctrl    "sigs.k8s.io/controller-runtime"
@@ -168,7 +169,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 		return 
 	}
 
-	body      = r.convertYaml(body)
+	body      = utils.ConvertYaml(body)
 	body, ok := body.(map[string]interface{})
 
 	if ! ok {
@@ -179,7 +180,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 		return
 	}
 
-	ldap := r.getYamlValue(body, []string{"general","ports","ldap"})
+	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"})
 
 	if ldap != nil {
 		iport, ok := ldap.(int)
@@ -203,7 +204,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 
 			port = 9636
 
-			ldaps := r.getYamlValue(body, []string{"general","ports","ldaps"})
+			ldaps := utils.GetYamlValue(
+							body, []string{"general","ports","ldaps"})
 
 			if ldaps != nil {
 				iport, ok := ldaps.(int)

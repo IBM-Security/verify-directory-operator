@@ -18,87 +18,12 @@ import (
 
 	"errors"
 
+	"github.com/ibm-security/verify-directory-operator/utils"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/go-yaml/yaml"
 )
-
-/*****************************************************************************/
-
-/*
- * Convert the parsed YAML into a hierarchical map.
- */
-
-func (r *IBMSecurityVerifyDirectoryReconciler) convertYaml(
-					i interface{}) interface{} {
-	switch x := i.(type) {
-
-		case map[interface{}]interface{}:
-			m2 := map[string]interface{}{}
-
-			for k, v := range x {
-				m2[k.(string)] = r.convertYaml(v)
-			}
-
-			return m2
-
-		case []interface{}:
-			for i, v := range x {
-				x[i] = r.convertYaml(v)
-			}
-
-	}
-
-    return i
-}
-
-/*****************************************************************************/
-
-/*
- * Retrieve the value of the specified YAML.
- */
-
-func (r *IBMSecurityVerifyDirectoryReconciler) getYamlValue(
-					i   interface{},
-					key []string) interface{} {
-
-	/*
-	 * The first thing to do is cast the yaml to the correct type.
-	 */
-
-	v, ok := i.(map[string]interface{}) 
-
-	if !ok {
-		return nil
-	}
-
-	/*
-	 * Retrieve the value of the current key.
-	 */
-
-	entry, ok := v[key[0]]
-
-	if !ok {
-		return nil
-	}
-
-	/*
-	 * If we are at the end of the key we just return the value of
-	 * the key.
-	 */
-
-
-	if len(key) == 1 {
-		return entry
-	}
-
-	/*
-	 * We are not at the end of the key and so we need to call getYamlValue
-	 * again, moving to the next key.
-	 */
-
-	return r.getYamlValue(entry, key[1:])
-}
 
 /*****************************************************************************/
 
@@ -139,7 +64,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 		return err
     }
 
-	body      = r.convertYaml(body)
+	body      = utils.ConvertYaml(body)
 	body, ok := body.(map[string]interface{})
 
 	if ! ok {
@@ -155,7 +80,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	h.config.port   = 9389
 	h.config.secure = false
 
-	ldap := r.getYamlValue(body, []string{"general","ports","ldap"})
+	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"})
 
 	if ldap != nil {
 		iport, ok := ldap.(int)
@@ -178,7 +103,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 			h.config.secure = true
 			h.config.port   = 9636
 
-			ldaps := r.getYamlValue(body, []string{"general","ports","ldaps"})
+			ldaps := utils.GetYamlValue(
+							body, []string{"general","ports","ldaps"})
 
 			if ldaps != nil {
 				iport, ok := ldaps.(int)
@@ -199,7 +125,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the license key information.
 	 */
 
-	licenseKey := r.getYamlValue(body, []string{"general","license","key"})
+	licenseKey := utils.GetYamlValue(body, []string{"general","license","key"})
 
 	if licenseKey == nil {
 		h.requeueOnError = false
@@ -213,7 +139,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the admin DN.
 	 */
 
-	adminDn := r.getYamlValue(body, []string{"general","admin","dn"})
+	adminDn := utils.GetYamlValue(body, []string{"general","admin","dn"})
 
 	if adminDn == nil {
 		h.config.adminDn = "cn=root"
@@ -225,7 +151,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the admin password.
 	 */
 
-	adminPwd := r.getYamlValue(body, []string{"general","admin","pwd"})
+	adminPwd := utils.GetYamlValue(body, []string{"general","admin","pwd"})
 
 	if adminPwd == nil {
 		h.requeueOnError = false
@@ -271,7 +197,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 					body interface{}) ([]string, error) {
 	var suffixes []string
 
-	entries := r.getYamlValue(body, []string{"server","suffixes"})
+	entries := utils.GetYamlValue(body, []string{"server","suffixes"})
 
 	if entries == nil {
 		return nil, errors.New("The server.suffixes configuration is missing.")
@@ -301,7 +227,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 						"The server.suffixes configuration is incorrect.")
 		}
 
-		dn := r.getYamlValue(suffixEntry, []string{"dn"})
+		dn := utils.GetYamlValue(suffixEntry, []string{"dn"})
 
 		if !ok {
 			return nil, errors.New(
