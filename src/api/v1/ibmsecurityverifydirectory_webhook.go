@@ -9,7 +9,7 @@ package v1
 /*****************************************************************************/
 
 import (
-	corev1  "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -18,11 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/go-yaml/yaml"
 	"github.com/ibm-security/verify-directory-operator/utils"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -60,7 +62,7 @@ func (r *IBMSecurityVerifyDirectory) SetupWebhookWithManager(
 
 /*****************************************************************************/
 
-//+kubebuilder:webhook:path=/mutate-ibm-com-v1-ibmsecurityverifydirectory,mutating=true,failurePolicy=fail,sideEffects=None,groups=ibm.com,resources=ibmsecurityverifydirectories,verbs=create;update,versions=v1,name=mibmsecurityverifydirectory.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-ibm-com-v1-ibmsecurityverifydirectory,mutating=true,failurePolicy=fail,sideEffects=None,groups=ibm.com,resources=ibmsecurityverifydirectories,verbs=create;update;delete,versions=v1,name=mibmsecurityverifydirectory.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &IBMSecurityVerifyDirectory{}
 
@@ -74,7 +76,7 @@ func (r *IBMSecurityVerifyDirectory) Default() {
 
 /*****************************************************************************/
 
-//+kubebuilder:webhook:path=/validate-ibm-com-v1-ibmsecurityverifydirectory,mutating=false,failurePolicy=fail,sideEffects=None,groups=ibm.com,resources=ibmsecurityverifydirectories,verbs=create;update,versions=v1,name=vibmsecurityverifydirectory.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-ibm-com-v1-ibmsecurityverifydirectory,mutating=false,failurePolicy=fail,sideEffects=None,groups=ibm.com,resources=ibmsecurityverifydirectories,verbs=create;update;delete,versions=v1,name=vibmsecurityverifydirectory.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &IBMSecurityVerifyDirectory{}
 
@@ -100,6 +102,17 @@ func (r *IBMSecurityVerifyDirectory) ValidateUpdate(old runtime.Object) error {
 	logger.Info("validate update", "name", r.Name)
 
 	/*
+	 * Check to ensure that we are not currently processing this document.
+	 */
+
+	if meta.IsStatusConditionTrue(r.Status.Conditions, "InProgress") {
+		return errors.New("The last update to this document is still being " +
+			"processed by the operator.  Wait until the existing document " +
+			"has been fully processed before attempting to update the " +
+			"document.")
+	}
+
+	/*
 	 * Validate the document itself.
 	 */
 
@@ -109,23 +122,44 @@ func (r *IBMSecurityVerifyDirectory) ValidateUpdate(old runtime.Object) error {
 		return err
 	}
 
-	/* XXX:
-	 * When updating an existing document we need to:
-	 *   - Ensure that the deployment is not in the failing state.  If in a
-	 *     failing state we must delete the deployment first.
-	 *   - Ensure that nothing within the pods entry has changed.  The only 
-	 *     thing which we support editing is the number of replicas.
-	 *   - Ensure that all existing pods for this deployment are currently
-	 *     available and reachable.  This is achieved with the following
-	 *     logic:
-	 *       retrieve the list of existing pods
-	 *       for each located pod:
-	 *         if the pod is not available and is not being deleted:
-	 *           return an error
-	 *         if the pod is being deleted and has been currently set as the \
-	 *         write master by the proxy:
-	 *           return an error
+	/*
+	 * Check to ensure that the document is not currently in the failing
+	 * state.
 	 */
+
+	err = r.validateDocumentState()
+
+	if err != nil {
+		return err
+	}
+
+	/*
+	 * Check to ensure that only valid fields have been updated in the
+	 * document.
+	 */
+
+	oldDirectory, ok := old.(*IBMSecurityVerifyDirectory)
+
+	if !ok {
+		return errors.New("An internal error occurred while trying to " +
+								"access the original document.")
+	}
+
+	err = r.validateDocumentUpdates(oldDirectory)
+
+	if err != nil {
+		return err
+	}
+
+	/*
+	 * Validate the updates which are being made to the pods.
+	 */
+
+	err = r.validatePods()
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -134,12 +168,23 @@ func (r *IBMSecurityVerifyDirectory) ValidateUpdate(old runtime.Object) error {
 
 /*
  * The ValidateDelete function implements a webhook.Validator so that a webhook
- * will be registered for the type and invoked for delete operations.  This
- * function is a no-op.
+ * will be registered for the type and invoked for delete operations.  
  */
 
 func (r *IBMSecurityVerifyDirectory) ValidateDelete() error {
 	logger.Info("validate delete", "name", r.Name)
+
+	/*
+	 * Ensure that we are not currently processing a document of the same
+	 * name.
+	 */
+
+	if meta.IsStatusConditionTrue(r.Status.Conditions, "InProgress") {
+		return errors.New("The last update to this document is still being " +
+			"processed by the operator.  Wait until the existing document " +
+			"has been fully processed before attempting to delete the " +
+			"document.")
+	}
 
 	return nil
 }
@@ -166,6 +211,35 @@ func (r *IBMSecurityVerifyDirectory) validateDocument() error {
 
 		if err != nil {
 			return err
+		}
+	}
+
+	/*
+	 * Ensure that the same PVC is not specified multiple times.
+	 */
+
+	allPVCs := make(map[string]bool)
+
+	for _, pvcName := range r.Spec.Replicas.PVCs {
+		_, ok := allPVCs[pvcName]
+
+		if ok {
+			return errors.New(fmt.Sprintf(
+				"The document contains a PVC which is referenced more than " +
+				"once: %s.  Each PVC in the document must be unique.", pvcName))
+		} else {
+			allPVCs[pvcName] = true
+		}
+	}
+
+	if r.Spec.Pods.Proxy.PVC != "" {
+		_, ok := allPVCs[r.Spec.Pods.Proxy.PVC]
+
+		if ok {
+			return errors.New(fmt.Sprintf(
+				"The document contains a PVC which is referenced more than " +
+				"once: %s.  Each PVC in the document must be unique.", 
+				r.Spec.Pods.Proxy.PVC))
 		}
 	}
 
@@ -250,9 +324,15 @@ func (r *IBMSecurityVerifyDirectory) validatePVC(pvcName string) (err error) {
 							Name:      pvcName,
 					}, pvc)
 
-	if err != nil && k8serrors.IsNotFound(err) {
-		err = errors.New(fmt.Sprintf("The PVC, %s, doesn't exist!", pvcName))
-	}
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			err = errors.New(
+						fmt.Sprintf("The PVC, %s, doesn't exist!", pvcName))
+		} else {
+			logger.Error(err, "Failed to retieve the requsted PVC.",
+					r.createLogParams("PVC", pvcName)...)
+		}
+	} 
 
 	return 
 }
@@ -273,9 +353,14 @@ func (r *IBMSecurityVerifyDirectory) validateConfigMap(
 							Name:      entry.Name,
 					}, cm)
 
-	if err != nil && k8serrors.IsNotFound(err) {
-		err = errors.New(
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			err = errors.New(
 				fmt.Sprintf("The ConfigMap, %s, doesn't exist!", entry.Name))
+		} else {
+			logger.Error(err, "Failed to retieve the requsted ConfigMap.",
+					r.createLogParams("ConfigMap", entry.Name)...)
+		}
 	}
 
 	if err == nil && entry.Key != "" {
@@ -306,9 +391,14 @@ func (r *IBMSecurityVerifyDirectory) validateSecret(
 							Name:      secretName,
 					}, secret)
 
-	if err != nil && k8serrors.IsNotFound(err) {
-		err = errors.New(
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			err = errors.New(
 					fmt.Sprintf("The secret, %s, doesn't exist!", secretName))
+		} else {
+			logger.Error(err, "Failed to retieve the requsted Secret.",
+					r.createLogParams("Secret", secretName)...)
+		}
 	}
 
 	return 
@@ -337,6 +427,9 @@ func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
 					}, config)
 
 	if err != nil {
+		logger.Error(err, "Failed to retieve the requsted ConfigMap.",
+					r.createLogParams("ConfigMap", name)...)
+
 		return err
 	}
 
@@ -350,6 +443,9 @@ func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
     var body interface{}
 
     if err = yaml.Unmarshal([]byte(config.Data[key]), &body); err != nil {
+		logger.Error(err, "Failed to unmarshal the ConfigMap data.",
+					r.createLogParams("ConfigMap", name)...)
+
 		return err
     }
 
@@ -377,5 +473,187 @@ func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
 	return nil
 }
 
+/*****************************************************************************/
+
+/*
+ * This function will check to ensure that the document is not currently in 
+ * the failing state.
+ */
+
+func (r *IBMSecurityVerifyDirectory) validateDocumentState() (err error) {
+
+	if meta.IsStatusConditionFalse(r.Status.Conditions, "Available") {
+		return errors.New(
+			"The deployment is in a failing state which means that it " +
+			"cannot be updated and instead must be deleted and then recreated.")
+	}
+
+	return nil
+}
+
+/*****************************************************************************/
+
+/*
+ * This function will check to ensure that only valid fields have been updated 
+ * in the document.  We essentially want to ensure that none of the pod
+ * configuration has been updated.
+ */
+
+func (r *IBMSecurityVerifyDirectory) validateDocumentUpdates(
+		old *IBMSecurityVerifyDirectory) (err error) {
+
+	if ! reflect.DeepEqual(r.Spec.Pods, old.Spec.Pods) {
+		return errors.New(
+			"The pod.specs entry has been changed.  If you need to modify " +
+			"pod.specs you must first delete the document and then recreate " +
+			"it.")
+	}
+
+	return nil
+}
+
+/*****************************************************************************/
+
+/*
+ * This function will validate that the pods are in a state which will allow
+ * an update.  
+ */
+
+func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
+
+	/*
+	 * Build up the list of pods which are to be added/deleted/left-alone.
+	 */
+
+	pods    := make(map[string]string)
+	podList := &corev1.PodList{}
+
+	opts := []client.ListOption{
+		client.InNamespace(r.Namespace),
+		client.MatchingLabels(utils.LabelsForApp(r.Name, "")),
+	}
+
+	err = k8s_client.List(context.TODO(), podList, opts...)
+
+	if err != nil {
+		logger.Error(err, "Failed to list the pods.", r.createLogParams()...)
+
+		return err
+	} 
+
+	for _, pod := range podList.Items {
+		pods[pod.ObjectMeta.Labels[utils.PVCLabel]] = pod.GetName()
+	}
+
+	var toBeDeleted []string
+	var toBeAdded   []string
+	var toBeLeft    []string
+
+	/*
+	 * Create a map of the new PVCs from the document.
+	 */
+
+	var pvcs = make(map[string]bool)
+
+	for _, pvcName := range r.Spec.Replicas.PVCs {
+		pvcs[pvcName] = true
+	}
+
+	/*
+	 * Work out the entries to be deleted.  This consists of the existing
+	 * replicas which don't appear in the current list of replicas.  At the
+	 * same time we work out which entries are to be left alone.  This will
+	 * be those entries in the list of running pods which still appear in the
+	 * curent document.
+	 */
+
+	for key, _:= range pods {
+		if _, ok := pvcs[key]; !ok {
+			toBeDeleted = append(toBeDeleted, key)
+		} else {
+			toBeLeft = append(toBeLeft, pods[key])
+		}
+	}
+
+	/*
+	 * Work out the entries to be added.  This consists of those replicas
+	 * which appear in the document which are not in the existing list of
+	 * replicas.
+	 */
+
+	for _, pvc := range r.Spec.Replicas.PVCs {
+		if _, ok := pods[pvc]; !ok {
+			toBeAdded = append(toBeAdded, pvc)
+		}
+	}
+
+	/*
+	 * If there are no changes to the pods we don't need to do anything
+	 * extra.
+	 */
+
+	if len(toBeDeleted) == 0 && len(toBeAdded) == 0 {
+		return nil
+	}
+
+	/*
+	 * For each pod which is to be left-alone, validate that the pod is
+	 * currently running and ready.
+	 */
+
+	for _, podName := range(toBeLeft) {
+		pod := &corev1.Pod{}
+
+		err  = k8s_client.Get(context.TODO(), client.ObjectKey{
+							Namespace: r.Namespace,
+							Name:      podName,
+					}, pod)
+
+		if err != nil {
+			logger.Error(err, "Failed to retrieve the pod.", 
+								r.createLogParams("Pod", podName)...)
+
+			return err
+		}
+
+		if pod.Status.Phase != corev1.PodRunning || 
+						!pod.Status.ContainerStatuses[0].Ready {
+			return errors.New(fmt.Sprintf("The pod, %s, is not currently " +
+				"ready.  You must wait until all pods are ready before " +
+				"attempting to edit the document.", podName))
+
+		}
+	}
+
+	/*
+	 * If there are any pods which are to be deleted check to ensure that the
+	 * pod is not currently the primary write master in the proxy.
+	 */
+
+	// XXX:
+
+	return nil
+}
+
+/*****************************************************************************/
+
+/*
+ * This function will create the logging parameters for a request.
+ */
+
+func (r *IBMSecurityVerifyDirectory) createLogParams(
+			extras ...interface{}) []interface{} {
+
+	params := []interface{}{
+				"Deployment.Namespace", r.Namespace,
+				"Deployment.Name",      r.Name,
+			}
+
+	for _, extra := range extras {
+		params = append(params, extra)
+	}
+
+	return params
+}
 /*****************************************************************************/
 

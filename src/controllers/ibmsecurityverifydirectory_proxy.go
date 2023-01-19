@@ -634,7 +634,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: h.directory.Namespace,
-				Labels:    r.labelsForApp(h.directory.Name, name),
+				Labels:    utils.LabelsForApp(h.directory.Name, name),
 			},
 	 		Spec: appsv1.DeploymentSpec{
 				Replicas: &replicas,

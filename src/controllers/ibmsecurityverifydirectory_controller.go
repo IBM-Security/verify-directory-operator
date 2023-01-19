@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
+	"github.com/ibm-security/verify-directory-operator/utils"
 
 	ctrl  "sigs.k8s.io/controller-runtime"
 	ibmv1 "github.com/ibm-security/verify-directory-operator/api/v1"
@@ -33,7 +34,6 @@ import (
  * Some constants...
  */
 
-const PVCLabel     = "app.kubernetes.io/pvc-name"
 const ConfigMapKey = "config.yaml"
 
 /*****************************************************************************/
@@ -187,6 +187,26 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	}
 
 	/*
+	 * Mark the deployment as in-progress.
+	 */
+
+	condition := metav1.Condition{
+		Type:    "InProgress",
+		Reason:  "DeploymentProgress",
+		Message: "The deployment is being processed.",
+		Status:  metav1.ConditionTrue,
+	}
+
+	meta.SetStatusCondition(&h.directory.Status.Conditions, condition)
+
+	if err := r.Status().Update(h.ctx, h.directory); err != nil {
+		r.Log.Error(err, "Failed to update the condition for the resource",
+						r.createLogParams(&h)...)
+	
+		return ctrl.Result{}, r.reconcileError(&h, err)
+	}
+
+	/*
 	 * Get the configuration to be used by the server.
 	 */
 
@@ -278,6 +298,15 @@ func (r *IBMSecurityVerifyDirectoryReconciler) setCondition(
 				h   *RequestHandle,
 				msg string) error {
 
+	progressCondition := metav1.Condition{
+		Type:    "InProgress",
+		Reason:  "DeploymentProgress",
+		Message: "The deployment has been processed.",
+		Status:  metav1.ConditionFalse,
+	}
+
+	meta.SetStatusCondition(&h.directory.Status.Conditions, progressCondition)
+
 	condition := metav1.Condition{
 		Type: "Available",
 	}
@@ -316,26 +345,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) setCondition(
 /*****************************************************************************/
 
 /*
- * Construct and return a list of labels for the deployment.
- */
-
-func (r *IBMSecurityVerifyDirectoryReconciler) labelsForApp(
-								name string, pvc string) map[string]string {
-	labels := map[string]string{
-			"app.kubernetes.io/created-by": "verify-directory-operator",
-			"app.kubernetes.io/part-of":    "verify-directory",
-			"app.kubernetes.io/cr-name":    name}
-
-	if pvc != "" {
-		labels[PVCLabel] = pvc
-	}
-
-	return labels
-}
-
-/*****************************************************************************/
-
-/*
  * The following function is used to retrieve a list of existing pods for
  * the current deployment.  It will return a map of existing pods, indexed
  * on the name of the PVC.
@@ -350,7 +359,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getExistingPods(
 
 	opts := []client.ListOption{
 		client.InNamespace(h.req.Namespace),
-		client.MatchingLabels(r.labelsForApp(h.req.Name, "")),
+		client.MatchingLabels(utils.LabelsForApp(h.req.Name, "")),
 	}
 
 	err := r.List(h.ctx, podList, opts...)
@@ -360,7 +369,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getExistingPods(
 						r.createLogParams(h)...)
 	} else {
 		for _, pod := range podList.Items {
-			pods[pod.ObjectMeta.Labels[PVCLabel]] = pod.GetName()
+			pods[pod.ObjectMeta.Labels[utils.PVCLabel]] = pod.GetName()
 		}
 	}
 

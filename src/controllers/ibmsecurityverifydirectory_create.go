@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/ibm-security/verify-directory-operator/utils"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -391,7 +393,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: h.directory.Namespace,
-			Labels:    r.labelsForApp(h.directory.Name, replicaPvc),
+			Labels:    utils.LabelsForApp(h.directory.Name, replicaPvc),
 		},
 		Spec: batchv1.JobSpec{
 			Completions:             &completions,
@@ -635,7 +637,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: h.directory.Namespace,
-			Labels:    r.labelsForApp(h.directory.Name, pvcName),
+			Labels:    utils.LabelsForApp(h.directory.Name, pvcName),
 		},
 		Spec: corev1.PodSpec{
 			Volumes:            volumes,

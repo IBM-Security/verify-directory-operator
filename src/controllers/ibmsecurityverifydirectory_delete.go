@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ibm-security/verify-directory-operator/utils"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -103,7 +105,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: h.directory.Namespace,
-			Labels:    r.labelsForApp(h.directory.Name, pvcName),
+			Labels:    utils.LabelsForApp(h.directory.Name, pvcName),
 		},
 	}
 
@@ -121,7 +123,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: h.directory.Namespace,
-			Labels:    r.labelsForApp(h.directory.Name, pvcName),
+			Labels:    utils.LabelsForApp(h.directory.Name, pvcName),
 		},
 	}
 

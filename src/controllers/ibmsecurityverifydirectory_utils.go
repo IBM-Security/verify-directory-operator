@@ -35,6 +35,8 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/ibm-security/verify-directory-operator/utils"
+
 	ibmv1 "github.com/ibm-security/verify-directory-operator/api/v1"
 )
 
@@ -117,7 +119,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mapName,
 			Namespace: h.directory.Namespace,
-			Labels:    r.labelsForApp(h.directory.Name, mapName),
+			Labels:    utils.LabelsForApp(h.directory.Name, mapName),
 		},
 		Data: map[string]string{
 			key: value,
@@ -171,7 +173,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteConfigMap(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mapName,
 			Namespace: h.directory.Namespace,
-			Labels:    r.labelsForApp(h.directory.Name, mapName),
+			Labels:    utils.LabelsForApp(h.directory.Name, mapName),
 		},
 	}
 
@@ -356,11 +358,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: h.directory.Namespace,
-			Labels:    r.labelsForApp(h.directory.Name, pvcName),
+			Labels:    utils.LabelsForApp(h.directory.Name, pvcName),
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
-			Selector: r.labelsForApp(h.directory.Name, pvcName),
+			Selector: utils.LabelsForApp(h.directory.Name, pvcName),
 			Ports:    []corev1.ServicePort{{
 				Name:       podName,
 				Protocol:   corev1.ProtocolTCP,
