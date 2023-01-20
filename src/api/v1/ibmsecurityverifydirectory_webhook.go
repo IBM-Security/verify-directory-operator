@@ -90,7 +90,9 @@ var _ webhook.Validator = &IBMSecurityVerifyDirectory{}
  */
 
 func (r *IBMSecurityVerifyDirectory) ValidateCreate() error {
-	logger.Info("validate create", "name", r.Name)
+
+	logger.V(1).Info("Entering a function", 
+				r.createLogParams("Function", "ValidateCreate")...)
 
 	return r.validateDocument()
 }
@@ -103,7 +105,9 @@ func (r *IBMSecurityVerifyDirectory) ValidateCreate() error {
  */
 
 func (r *IBMSecurityVerifyDirectory) ValidateUpdate(old runtime.Object) error {
-	logger.Info("validate update", "name", r.Name)
+
+	logger.V(1).Info("Entering a function", 
+				r.createLogParams("Function", "ValidateUpdate")...)
 
 	/*
 	 * Check to ensure that we are not currently processing this document.
@@ -176,7 +180,9 @@ func (r *IBMSecurityVerifyDirectory) ValidateUpdate(old runtime.Object) error {
  */
 
 func (r *IBMSecurityVerifyDirectory) ValidateDelete() error {
-	logger.Info("validate delete", "name", r.Name)
+
+	logger.V(1).Info("Entering a function", 
+				r.createLogParams("Function", "ValidateDelete")...)
 
 	/*
 	 * Ensure that we are not currently processing a document of the same
@@ -197,6 +203,9 @@ func (r *IBMSecurityVerifyDirectory) ValidateDelete() error {
 
 func (r *IBMSecurityVerifyDirectory) validateDocument() error {
 	var err error
+
+	logger.V(1).Info("Entering a function", 
+				r.createLogParams("Function", "validateDocument")...)
 
 	/*
 	 * Validate that each of the PVCs specified in the document exists.
@@ -322,11 +331,17 @@ func (r *IBMSecurityVerifyDirectory) validateDocument() error {
 
 func (r *IBMSecurityVerifyDirectory) validatePVC(pvcName string) (err error) {
 
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "validatePVC", "PVC.Name", pvcName)...)
+
 	pvc := &corev1.PersistentVolumeClaim{}
 	err  = k8s_client.Get(context.TODO(), client.ObjectKey{
 							Namespace: r.Namespace,
 							Name:      pvcName,
 					}, pvc)
+
+	logger.V(1).Info("Retrieved the PVC", 
+				r.createLogParams("PVC.Name", pvcName, "PVC", pvc)...)
 
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -351,11 +366,17 @@ func (r *IBMSecurityVerifyDirectory) validatePVC(pvcName string) (err error) {
 func (r *IBMSecurityVerifyDirectory) validateConfigMap(
 				entry IBMSecurityVerifyDirectoryConfigMapEntry) (err error) {
 
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "validateConfigMap", "Entry", entry)...)
+
 	cm := &corev1.ConfigMap{}
 	err = k8s_client.Get(context.TODO(), client.ObjectKey{
 							Namespace: r.Namespace,
 							Name:      entry.Name,
 					}, cm)
+
+	logger.V(1).Info("Retrieved the ConfigMap", 
+			r.createLogParams("ConfigMap.Name", entry.Name, "ConfigMap", cm)...)
 
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -389,11 +410,17 @@ func (r *IBMSecurityVerifyDirectory) validateConfigMap(
 func (r *IBMSecurityVerifyDirectory) validateSecret(
 					secretName string) (err error) {
 
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "validateSecret", "Name", secretName)...)
+
 	secret := &corev1.Secret{}
 	err     = k8s_client.Get(context.TODO(), client.ObjectKey{
 							Namespace: r.Namespace,
 							Name:      secretName,
 					}, secret)
+
+	logger.V(1).Info("Retrieved the Secret", 
+			r.createLogParams("Secret.Name", secretName, "Secret", secret)...)
 
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -417,6 +444,9 @@ func (r *IBMSecurityVerifyDirectory) validateSecret(
 
 func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
 
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "validateProxyConfigMap")...)
+
 	/*
 	 * Retrieve the ConfigMap which contains the proxy configuration.
 	 */
@@ -429,6 +459,9 @@ func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
 							Namespace: r.Namespace,
 							Name:      name,
 					}, config)
+
+	logger.V(1).Info("Retrieved the Proxy ConfigMap", 
+			r.createLogParams("ConfigMap.Name", name, "ConfigMap", config)...)
 
 	if err != nil {
 		logger.Error(err, "Failed to retieve the requsted ConfigMap.",
@@ -454,6 +487,9 @@ func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
     }
 
 	body = utils.ConvertYaml(body)
+
+	logger.V(1).Info("Retrieved the Proxy ConfigMap data", 
+			r.createLogParams("ConfigMap.Name", name, "Data", body)...)
 
 	/*
 	 * Ensure that the server-groups and suffixes entries don't exist.
@@ -487,6 +523,9 @@ func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
 
 func (r *IBMSecurityVerifyDirectory) validateDocumentState() (err error) {
 
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "validateDocumentState")...)
+
 	if meta.IsStatusConditionFalse(r.Status.Conditions, "Available") {
 		return errors.New(
 			"The deployment is in a failing state which means that it " +
@@ -507,6 +546,9 @@ func (r *IBMSecurityVerifyDirectory) validateDocumentState() (err error) {
 func (r *IBMSecurityVerifyDirectory) validateDocumentUpdates(
 		old *IBMSecurityVerifyDirectory) (err error) {
 
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "validateDocumentUpdates")...)
+
 	if ! reflect.DeepEqual(r.Spec.Pods, old.Spec.Pods) {
 		return errors.New(
 			"The pod.specs entry has been changed.  If you need to modify " +
@@ -525,6 +567,9 @@ func (r *IBMSecurityVerifyDirectory) validateDocumentUpdates(
  */
 
 func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
+
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "validatePods")...)
 
 	/*
 	 * Build up the list of pods which are to be added/deleted/left-alone.
@@ -545,6 +590,9 @@ func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
 
 		return err
 	} 
+
+	logger.V(1).Info("Found existing pods", 
+			r.createLogParams("List", podList.Items)...)
 
 	for _, pod := range podList.Items {
 		pods[pod.ObjectMeta.Labels[utils.PVCLabel]] = pod.GetName()
@@ -592,6 +640,10 @@ func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
 		}
 	}
 
+	logger.V(1).Info("Processed the pods", 
+			r.createLogParams("ToBeDeleted", toBeDeleted, "ToBeAdded", 
+					toBeAdded, "ToBeLeft", toBeLeft)...)
+
 	/*
 	 * If there are no changes to the pods we don't need to do anything
 	 * extra.
@@ -613,6 +665,9 @@ func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
 							Namespace: r.Namespace,
 							Name:      podName,
 					}, pod)
+
+		logger.V(1).Info("Retrieved the pod", 
+			r.createLogParams("Pod.Name", podName, "Pod", pod)...)
 
 		if err != nil {
 			logger.Error(err, "Failed to retrieve the pod.", 
@@ -656,6 +711,9 @@ func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
 
 func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[string]bool, err error) {
 
+	logger.V(1).Info("Entering a function", 
+		r.createLogParams("Function", "getPrimaryWriteMasters")...)
+
 	primaries = make(map[string]bool)
 
 	/*
@@ -675,6 +733,9 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 		return
 	}
 
+	logger.V(1).Info("Retrieved the proxy service", 
+			r.createLogParams("Service", service)...)
+
 	address := service.Spec.ClusterIP
 	port    := service.Spec.Ports[0].Port
 
@@ -689,6 +750,9 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 						Namespace: r.Namespace,
 						Name:      configMapName }, 
 					config)
+
+	logger.V(1).Info("Retrieved the proxy ConfigMap", 
+			r.createLogParams("ConfigMap", config)...)
 
 	if err != nil {
  		logger.Error(err, "Failed to retrieve the ConfigMap",
@@ -712,6 +776,10 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 
 		return
     }
+
+	logger.V(1).Info("Retrieved the proxy ConfigMap data", 
+			r.createLogParams("Key", utils.ProxyCMKey, "Data", body)...)
+
 
 	body      = utils.ConvertYaml(body)
 	body, ok := body.(map[string]interface{})
@@ -774,7 +842,11 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 	 * Connect to the server.
 	 */
 
+	logger.V(1).Info("Connecting to the LDAP server", 
+			r.createLogParams("Address", address, "Port", port)...)
+
 	l, err := ldap.DialURL(fmt.Sprintf("ldap://%s:%d", address, port))
+
 	if err != nil {
 		logger.Error(err, "Failed to connect to the LDAP proxy", 
 					r.createLogParams()...)
@@ -798,6 +870,9 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 	/*
 	 * Bind to the server.
 	 */
+	 
+	logger.V(1).Info("Binding to the LDAP server", 
+			r.createLogParams("DN", adminDn)...)
 
 	err = l.Bind(adminDn, adminPwd)
 	if err != nil {
@@ -827,6 +902,9 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 
 		return
 	}
+
+	logger.V(1).Info("Performed a search against the LDAP server", 
+			r.createLogParams("Results", sr)...)
 
 	if len(sr.Entries) == 0 {
 		err = errors.New(
