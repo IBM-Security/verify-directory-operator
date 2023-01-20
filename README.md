@@ -5,13 +5,13 @@
     + [Standard Kubernetes Environment](#standard-kubernetes-environment)
       - [OperatorHub.io and the Operator Lifecycle Manager](#operatorhubio-and-the-operator-lifecycle-manager)
         * [Installing](#installing)
-      - [Manual Installation](#manual-installation)
   * [Usage](#usage)
     + [Configuration](#Configuration)
     + [Persistent Volumes](#persistent-volumes)
     + [Deploying a Directory Server](#deploying-a-directory-server)
     + [Custom Resource Definition](#custom-resource-definition)
     + [Creating a Service](#creating-a-service)
+ * [Troubleshooting](#Troubleshooting)
 
 ## Overview
 
@@ -41,7 +41,26 @@ At a high level, the operator will complete the steps depicted in the following 
 
 ### RedHat OpenShift Environment
 
-The IBM Security Verify Access Operator is available from the RedHat community operator catalog.  Information on how to install a community operator in OpenShift can be obtained from the official RedHat OpenShift documentation.
+The [RedHat Operator Catalog](https://catalog.redhat.com/software/operators/search) provides a single place where Kubernetes administrators or developers can go to find existing operators that may provide the functionality that they require in an OpenShift environment. 
+
+The information provided by the [RedHat Operator Catalog](https://catalog.redhat.com/software/operators/search) allows the Operator Lifecycle Manager (OLM) to manage the operator throughout its complete lifecycle. This includes the initial installation and subscription to the RedHat Operator Catalog such that updates to the operator can be performed automatically.
+
+#### Procedure
+
+To install the IBM Security Verify Directory operator from the RedHat Operator Catalog:
+
+1. Log into the OpenShift console as an administrator.
+2. In the left navigation column, click Operators and then OperatorHub. Type 'verify-directory-operator' in the search box, and click on the IBM Security Verify Directory Operator box that appears.
+![OpenShift Operator Search](src/images/OpenShiftOperatorSearch.png)
+3. After reviewing the product information, click the `Install` button.
+![OpenShift Operator Info](src/images/OpenShiftOperatorProductInfo.png)
+4. On the 'Install Operator' page that opens, specify the cluster namespace in which to install the operator. Also click the `Automatic` radio button under Approval Strategy, to enable automatic updates of the running Operator instance without manual approval from the administrator. Click the `Install` button.
+![OpenShift Operator Subscription](src/images/OpenShiftOperatorSubscription.png)
+5. Ensure that the IBM Security Verify Directory operator has been installed correctly by the Operator Lifecycle Manager. 
+![OpenShift Operator Installed](src/images/OpenShiftOperatorInstalled.png)
+
+At this point the Operator Lifecycle Manager has been installed into the Kubernetes cluster, the IBM Security Verify Directory operator has been deployed and a subscription has been created that will monitor for any updates to the operator in the RedHat Operator Catalog. The IBM Security Verify Directory operator is now operational and any subsequent resources which are created of the kind `IBMSecurityVerifyDirectory` will result in the operator being invoked to manage the deployment.
+
 
 ### Standard Kubernetes Environment
 
@@ -71,31 +90,6 @@ verify-directory-operator.v23.3.0   IBM Security Verify Directory Operator   23.
 ``` 
 
 At this point the Operator Lifecycle Manager has been installed into the Kubernetes cluster, the IBM Security Verify Directory operator has been deployed and a subscription has been created that will monitor for any updates to the operator on OperatorHub.io. The IBM Security Verify Directory operator is now operational and any subsequent custom resources of the kind "IBMSecurityVerifyDirectory" will result in the operator being invoked to create the deployment.
-
-#### Manual Installation
-
-The IBM Security Verify Directory operator in essence is made up of 2 components:
-
-1. The custom resource definition
-2. The controller application
-
-Each of these needs to be deployed into the Kubernetes environment before the operator can function.  The definitions for these resources are published with the IBM Security Verify Directory Operator GitHub release in a single `bundle.yaml` file.  
-
-To see a list of available releases refer to the releases page in GitHub: [https://github.com/IBM-Security/verify-directory-operator/releases](https://github.com/IBM-Security/verify-directory-operator/releases).
-
-The following command can be used to deploy the operator directly from the definition published to GitHub:
-
-```shell
-kubectl create -f https://github.com/ibm-security/verify-directory-operator/releases/download/v22.3.0/bundle.yaml
-```
-After executing this command the operator will be deployed to a newly created namespace: `verify-directory-operator-system`.  The following command can be used to validate that the operator has been deployed correctly.  The available field should be set to "1". Note that this may take a few minutes.
-
-```shell
-kubectl get deployment -n verify-directory-operator-system
-NAME                                           READY   UP-TO-DATE   AVAILABLE   AGE
-verify-directory-operator-controller-manager   1/1     1            1           21s
-```
-At this point the IBM Security Verify Directory operator has been deployed and is operational.  Any subsequent custom resources of the kind "IBMSecurityVerifyDirectory" will result in the operator being invoked to create the deployment.
 
 
 ## Usage
@@ -336,4 +330,11 @@ spec:
   type: NodePort
 ```
 
-The server replicas will communicate with each other, and the proxy, using `ClusterIP` services.  These services will be automatically created by the operator.  Please note that if the LDAP port is enabled this will be used for communication.  If LDAPS is being used the server and proxy configurations must  
+The server replicas will communicate with each other, and the proxy, using `ClusterIP` services.  These services will be automatically created by the operator.  Please note that if the LDAP port is enabled this will be used for communication.  If LDAPS is being used the server and proxy configurations must be configured so that they are able to trust the server certificates in use. 
+
+## Troubleshooting
+
+In the event that the system fails to deploy an environment, for example due to a misconfiguration of the LDAP server, the environment will be left in the failing state.  This will allow an administrator to examine the log files to help determine and rectify the cause of the failure.  If a deployment is in a failing state it won't be possible to modify, in the environment, the failing 'IBMSecurityVerifyDirectory' document.  The document must first be deleted from the environment.
+
+To help debug any failures the log of the operator controller can also be examined.    The operator controller will be named something like, `verify-directory-operator-controller-manager-5856c8664c-wnnpm`, and will be in the namespace into which the operator was installed.
+
