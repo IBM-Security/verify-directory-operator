@@ -35,9 +35,8 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
-
-var proxyCMKey = "config.yaml"
 
 /*****************************************************************************/
 
@@ -180,7 +179,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 		return
 	}
 
-	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"})
+	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"}, 
+						true, h.directory.Namespace)
 
 	if ldap != nil {
 		iport, ok := ldap.(int)
@@ -205,7 +205,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 			port = 9636
 
 			ldaps := utils.GetYamlValue(
-							body, []string{"general","ports","ldaps"})
+							body, []string{"general","ports","ldaps"}, 
+							true, h.directory.Namespace)
 
 			if ldaps != nil {
 				iport, ok := ldaps.(int)
@@ -397,7 +398,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 			h    *RequestHandle,
 			yaml string) (updated bool, err error) {
 
-	name := r.getProxyConfigMapName(h.directory)
+	name := utils.GetProxyConfigMapName(h.directory.Name)
 
 	/*
 	 * Check to see if the ConfigMap already exists.
@@ -424,7 +425,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 	create := true
 
 	if err == nil {
-		if yaml == configMap.Data[proxyCMKey] {
+		if yaml == configMap.Data[utils.ProxyCMKey] {
 			updated = false
 
 			return
@@ -440,7 +441,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 
 	updated = true
 
-	err = r.createConfigMap(h, name, !create, proxyCMKey, yaml)
+	err = r.createConfigMap(h, name, !create, utils.ProxyCMKey, yaml)
 
 	if err != nil {
 		return
@@ -460,7 +461,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 			h    *RequestHandle,
 			port int32) (err error) {
 
-	name := r.getProxyDeploymentName(h.directory)
+	name := utils.GetProxyDeploymentName(h.directory.Name)
 
 	/*
 	 * Check to see whether the pod already exists.  If it does we just
@@ -505,7 +506,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 			return
 		}
 	} else {
-		configMapName := r.getProxyConfigMapName(h.directory)
+		configMapName := utils.GetProxyConfigMapName(h.directory.Name)
 	
 		/*
 		 * The pod does not yet exist and so we need to create the pod now.
@@ -538,8 +539,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 							Name: configMapName,
 						},
 						Items: []corev1.KeyToPath{{
-							Key:  proxyCMKey,
-							Path: proxyCMKey,
+							Key:  utils.ProxyCMKey,
+							Path: utils.ProxyCMKey,
 						}},
 					},
 				},
@@ -582,7 +583,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 		env := append(h.directory.Spec.Pods.Env, 
 			corev1.EnvVar {
 				Name: "YAML_CONFIG_FILE",
-				Value: fmt.Sprintf("/var/isvd/config/%s", proxyCMKey),
+				Value: fmt.Sprintf("/var/isvd/config/%s", utils.ProxyCMKey),
 			},
 		)
 
@@ -683,6 +684,50 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 						r.createLogParams(h, "Deployment.Name", dep.Name)...)
 
 			return 
+		}
+
+		/*
+		 * Create the cluster service for the proxy.
+		 */
+
+
+		service := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: h.directory.Namespace,
+				Labels:    labels,
+			},
+			Spec: corev1.ServiceSpec{
+				Type:     corev1.ServiceTypeClusterIP,
+				Selector: labels,
+				Ports:    []corev1.ServicePort{{
+					Name:       name,
+					Protocol:   corev1.ProtocolTCP,
+					Port:       port,
+					TargetPort: intstr.IntOrString {
+						Type:   intstr.Int,
+						IntVal: port,
+					},
+				}},
+			},
+		}
+
+		ctrl.SetControllerReference(h.directory, service, r.Scheme)
+
+		/*
+		 * Create the service.
+		 */
+
+		r.Log.Info("Creating a new service for the proxy", 
+				r.createLogParams(h, "Deployment.Name", name)...)
+
+		err := r.Create(h.ctx, service)
+
+		if err != nil {
+			r.Log.Error(err, "Failed to create the service for the proxy",
+				r.createLogParams(h, "Deployment.Name", name)...)
+
+			return err
 		}
 	}
 

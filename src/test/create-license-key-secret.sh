@@ -10,5 +10,6 @@ if [ $# -ne 1 ] ; then
     exit 1
 fi
 
-kubectl create secret generic isvd-secret --from-literal=license-key=$1
+kubectl create secret generic isvd-secret --from-literal=license-key=$1 \
+        --from-literal=admin-password=passw0rd1
 

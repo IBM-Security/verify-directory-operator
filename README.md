@@ -104,6 +104,8 @@ At this point the IBM Security Verify Directory operator has been deployed and i
 
 Each directory server deployment requires two configuration files, one to contain the configuration of the directory server, and another to contain the base configuration of the proxy.  These configuration files must be contained within a Kubernetes ConfigMap.
 
+**NB**: The operator will read the LDAP port information from the server and proxy configuration, and will also read the admin credential information from the proxy configuration.  These configuration entries must be embedded as literals within the configuration, or referenced directly from a secret.  The other configuration formats (e.g. base64, ConfigMap, environment variable, external file) must not be used for these configuration entries.  For further details on the format of configuration data refer to the official product [documentation](https://www.ibm.com/docs/en/svd?topic=configuration-format).
+
 #### Server Configuration
 
 Documentation for the server configuration can be located in the YAML specification, which is available in the official documentation: [https://www.ibm.com/docs/en/svd?topic=specification-verify-directory-server]().

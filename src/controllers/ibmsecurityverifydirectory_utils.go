@@ -67,30 +67,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getSeedConfigMapName(
 /*****************************************************************************/
 
 /*
- * The following function is used to generate the ConfigMap name for the 
- * proxy deployment.
- */
-
-func (r *IBMSecurityVerifyDirectoryReconciler) getProxyConfigMapName(
-			directory  *ibmv1.IBMSecurityVerifyDirectory) (string) {
-	return strings.ToLower(fmt.Sprintf("%s-proxy", directory.Name))
-}
-
-/*****************************************************************************/
-
-/*
- * The following function is used to generate the deployment name for the 
- * proxy deployment.
- */
-
-func (r *IBMSecurityVerifyDirectoryReconciler) getProxyDeploymentName(
-			directory  *ibmv1.IBMSecurityVerifyDirectory) (string) {
-	return strings.ToLower(fmt.Sprintf("%s-proxy", directory.Name))
-}
-
-/*****************************************************************************/
-
-/*
  * The following function will create the name of the job which is used to
  * seed the replica.
  */

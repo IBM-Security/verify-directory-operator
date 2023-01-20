@@ -80,7 +80,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	h.config.port   = 9389
 	h.config.secure = false
 
-	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"})
+	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"}, 
+									true, h.directory.Namespace)
 
 	if ldap != nil {
 		iport, ok := ldap.(int)
@@ -104,7 +105,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 			h.config.port   = 9636
 
 			ldaps := utils.GetYamlValue(
-							body, []string{"general","ports","ldaps"})
+							body, []string{"general","ports","ldaps"}, 
+							true, h.directory.Namespace)
 
 			if ldaps != nil {
 				iport, ok := ldaps.(int)
@@ -125,7 +127,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the license key information.
 	 */
 
-	licenseKey := utils.GetYamlValue(body, []string{"general","license","key"})
+	licenseKey := utils.GetYamlValue(body, 
+						[]string{"general","license","key"}, 
+						false, h.directory.Namespace)
 
 	if licenseKey == nil {
 		h.requeueOnError = false
@@ -139,7 +143,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the admin DN.
 	 */
 
-	adminDn := utils.GetYamlValue(body, []string{"general","admin","dn"})
+	adminDn := utils.GetYamlValue(body, []string{"general","admin","dn"}, 
+						false, h.directory.Namespace)
 
 	if adminDn == nil {
 		h.config.adminDn = "cn=root"
@@ -151,7 +156,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the admin password.
 	 */
 
-	adminPwd := utils.GetYamlValue(body, []string{"general","admin","pwd"})
+	adminPwd := utils.GetYamlValue(body, 
+									[]string{"general","admin","pwd"}, 
+									false, h.directory.Namespace)
 
 	if adminPwd == nil {
 		h.requeueOnError = false
@@ -167,7 +174,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * extract each of the dn's from the suffixes entry.
 	 */
 
-	h.config.suffixes, err = r.getConfigSuffixes(body)
+	h.config.suffixes, err = r.getConfigSuffixes(body, h.directory.Namespace)
 
 	if err != nil {
 		h.requeueOnError = false
@@ -194,10 +201,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
-					body interface{}) ([]string, error) {
+					body interface{}, namespace string) ([]string, error) {
 	var suffixes []string
 
-	entries := utils.GetYamlValue(body, []string{"server","suffixes"})
+	entries := utils.GetYamlValue(body, []string{"server","suffixes"}, 
+						false, namespace)
 
 	if entries == nil {
 		return nil, errors.New("The server.suffixes configuration is missing.")
@@ -227,7 +235,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 						"The server.suffixes configuration is incorrect.")
 		}
 
-		dn := utils.GetYamlValue(suffixEntry, []string{"dn"})
+		dn := utils.GetYamlValue(suffixEntry, []string{"dn"}, false, namespace)
 
 		if !ok {
 			return nil, errors.New(

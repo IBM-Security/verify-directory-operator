@@ -16,11 +16,15 @@ import (
     "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strings"
 
 	"github.com/go-yaml/yaml"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/ibm-security/verify-directory-operator/utils"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -458,7 +462,8 @@ func (r *IBMSecurityVerifyDirectory) validateProxyConfigMap() (err error) {
 	entries := []string { "server-groups", "suffixes" }
 
 	for _, entry := range entries {
-		config := utils.GetYamlValue(body, []string{"proxy", entry})
+		config := utils.GetYamlValue(body, []string{"proxy", entry}, false, 
+						r.Namespace)
 
 		if config != nil {
 			err = errors.New(
@@ -621,7 +626,6 @@ func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
 			return errors.New(fmt.Sprintf("The pod, %s, is not currently " +
 				"ready.  You must wait until all pods are ready before " +
 				"attempting to edit the document.", podName))
-
 		}
 	}
 
@@ -630,9 +634,236 @@ func (r *IBMSecurityVerifyDirectory) validatePods() (err error) {
 	 * pod is not currently the primary write master in the proxy.
 	 */
 
-	// XXX:
+	primaries, err := r.getPrimaryWriteMasters()
+
+	if err != nil {
+		return err
+	}
+
+	for _, pvc := range toBeDeleted {
+		if _, ok := primaries[pvc]; ok {
+			return errors.New(fmt.Sprintf("The pvc, %s, is currently " +
+				"being used as the primary write master by the LDAP proxy. " +
+				"As a result it is not currently possible to remove this " +
+				"PVC.", pvc))
+		}
+	}
 
 	return nil
+}
+
+/*****************************************************************************/
+
+func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[string]bool, err error) {
+
+	primaries = make(map[string]bool)
+
+	/*
+	 * Work out the service IP address and port for the proxy.
+	 */
+
+	service := &corev1.Service{}
+	err      = k8s_client.Get(context.TODO(), client.ObjectKey{
+						Namespace: r.Namespace,
+						Name:      utils.GetProxyDeploymentName(r.Name),
+					}, service)
+
+	if err != nil {
+		logger.Error(err, "Failed to locate the proxy service.",
+					r.createLogParams()...)
+
+		return
+	}
+
+	address := service.Spec.ClusterIP
+	port    := service.Spec.Ports[0].Port
+
+	/*
+	 * Work out some of the configuration information for the proxy.
+	 */
+
+	configMapName := utils.GetProxyConfigMapName(r.Name)
+
+	config := &corev1.ConfigMap{}
+	err	    = k8s_client.Get(context.TODO(), client.ObjectKey{
+						Namespace: r.Namespace,
+						Name:      configMapName }, 
+					config)
+
+	if err != nil {
+ 		logger.Error(err, "Failed to retrieve the ConfigMap",
+						r.createLogParams("ConfigMap.Name", configMapName)...)
+
+		return 
+	}
+
+	/*
+	 * Parse the configuration data into a map.
+	 */
+
+    var body interface{}
+
+    err = yaml.Unmarshal([]byte(config.Data[utils.ProxyCMKey]), &body)
+
+	if err != nil {
+		logger.Error(err, "Failed to decode the data from the ConfigMap.",
+				r.createLogParams("ConfigMap.Name", configMapName,
+				"ConfigMap.Key", utils.ProxyCMKey)...)
+
+		return
+    }
+
+	body      = utils.ConvertYaml(body)
+	body, ok := body.(map[string]interface{})
+
+	if ! ok {
+		err = errors.New("Failed to decode the ConfigMap for the proxy.")
+
+		logger.Error(err, "Failed to decode the data from the ConfigMap.",
+				r.createLogParams("ConfigMap.Name", configMapName,
+				"ConfigMap.Key", utils.ProxyCMKey)...)
+
+		return 
+	}
+
+	/*
+	 * Retrieve the data from the map.
+	 */
+
+	secure    := false
+	adminDn   := "cn=root"
+	adminPwd  := ""
+
+	entry := utils.GetYamlValue(body, []string{"general","ports","ldap"}, 
+						true, r.Namespace)
+
+	if entry != nil {
+		iport, ok := entry.(int)
+
+		if ! ok {
+			err = errors.New(
+						"The general.ports.ldap configuration is incorrect.")
+
+			return
+		}
+
+		if (iport == 0) {
+			secure = true
+		}
+	}
+
+	entry = utils.GetYamlValue(body, []string{"general","admin","dn"}, 
+						true, r.Namespace)
+
+	if entry != nil {
+		adminDn = entry.(string)
+	}
+
+	entry = utils.GetYamlValue(body, []string{"general","admin","pwd"}, 
+						true, r.Namespace)
+
+	if entry == nil {
+		err = errors.New("The general.admin.pwd configuration is missing.")
+
+		return
+	}
+
+	adminPwd = entry.(string)
+
+	/*
+	 * Connect to the server.
+	 */
+
+	l, err := ldap.DialURL(fmt.Sprintf("ldap://%s:%d", address, port))
+	if err != nil {
+		logger.Error(err, "Failed to connect to the LDAP proxy", 
+					r.createLogParams()...)
+
+		return
+	}
+	defer l.Close()
+
+	if secure {
+		err = l.StartTLS(&tls.Config{InsecureSkipVerify: true})
+
+		if err != nil {
+			logger.Error(err, 
+				"Failed to start a TLS session with the LDAP proxy", 
+				r.createLogParams()...)
+
+			return
+		}
+	}
+
+	/*
+	 * Bind to the server.
+	 */
+
+	err = l.Bind(adminDn, adminPwd)
+	if err != nil {
+		logger.Error(err, "Failed to bind to the LDAP proxy",
+					r.createLogParams()...)
+
+		return
+	}
+
+	/*
+	 * Search the proxy to find out who the primary write master is.
+	 */
+
+	searchRequest := ldap.NewSearchRequest(
+		"cn=partitions,cn=proxy,cn=monitor",
+		ldap.ScopeBaseObject, ldap.NeverDerefAliases, 0, 0, false,
+		"(objectClass=*)",
+		nil,
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
+	if err != nil {
+		logger.Error(err, 
+			"Failed to locate the split information from the LDAP proxy",
+			r.createLogParams()...)
+
+		return
+	}
+
+	if len(sr.Entries) == 0 {
+		err = errors.New(
+			"The split information does not exist in the LDAP proxy.")
+
+		logger.Error(err, "Entry does not exist.", r.createLogParams()...)
+
+		return
+	}
+
+	/*
+	 * Process the search results looking for any primary write masters.
+	 */
+
+	expr := fmt.Sprintf(".*ibm-slapdProxyBackendServerName=%s-(.[^,]*)", 
+						strings.ToLower(r.Name))
+	re   := regexp.MustCompile(expr)
+
+	for _, entry := range(sr.Entries) {
+		for _, attr := range(entry.Attributes) {
+			if attr.Name == "ibm-slapdProxyCurrentServerRole" {
+				if len(attr.Values) == 1 && 
+								attr.Values[0] == "primarywriteserver" {
+					match := re.FindStringSubmatch(entry.DN)
+
+					if len(match) > 1 {
+						primaries[match[1]] = true
+					}
+				}
+			}
+		}
+	}
+
+	logger.Info("Found primary write servers.", 
+			r.createLogParams("PVC.Names", primaries)...)
+
+	return
 }
 
 /*****************************************************************************/

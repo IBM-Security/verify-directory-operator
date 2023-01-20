@@ -14,8 +14,23 @@ package utils
 /*****************************************************************************/
 
 import (
+	corev1 "k8s.io/api/core/v1"
 
+	"context"
+	"regexp"
+	"strings"
+
+    "sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+/*****************************************************************************/
+
+/*
+ * The following object allows us to access the Kubernetes API.  It will be
+ * initialised by the main line function.
+ */
+
+var K8sClient client.Client
 
 /*****************************************************************************/
 
@@ -53,8 +68,10 @@ func ConvertYaml(
  */
 
 func GetYamlValue(
-					i   interface{},
-					key []string) interface{} {
+					i         interface{},
+					key       []string,
+					resolve   bool,
+					namespace string) interface{} {
 
 	/*
 	 * The first thing to do is cast the yaml to the correct type.
@@ -83,7 +100,11 @@ func GetYamlValue(
 
 
 	if len(key) == 1 {
-		return entry
+		if resolve {
+			return ResolveEntry(entry, namespace)
+		} else {
+			return entry
+		}
 	}
 
 	/*
@@ -91,7 +112,48 @@ func GetYamlValue(
 	 * again, moving to the next key.
 	 */
 
-	return GetYamlValue(entry, key[1:])
+	return GetYamlValue(entry, key[1:], resolve, namespace)
+}
+
+
+/*****************************************************************************/
+
+/*
+ * Resolve the specified YAML entry.
+ */
+
+func ResolveEntry(entry interface{}, namespace string) interface{} {
+
+	unresolved, ok := entry.(string)
+
+	if ok {
+		if strings.HasPrefix(unresolved, "secret:") {
+			entry = nil
+
+			expr  := "secret:(.[^/]*)/(.*)"
+			re    := regexp.MustCompile(expr)
+			match := re.FindStringSubmatch(unresolved)
+
+			if len(match) == 3 {
+				secret := &corev1.Secret{}
+				err    := K8sClient.Get(context.TODO(), client.ObjectKey{
+								Namespace: namespace,
+								Name:      match[1],
+							}, secret)
+
+				if err == nil {
+					value, ok := secret.Data[match[2]]
+
+					if ok {
+						entry = string(value)
+					}
+				}
+			}
+		}
+
+	}
+
+	return entry
 }
 
 /*****************************************************************************/

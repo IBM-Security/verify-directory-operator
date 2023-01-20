@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	ibmv1 "github.com/ibm-security/verify-directory-operator/api/v1"
+	"github.com/ibm-security/verify-directory-operator/utils"
 	"github.com/ibm-security/verify-directory-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
@@ -78,6 +79,8 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	utils.K8sClient = mgr.GetClient()
 
 	if err = (&controllers.IBMSecurityVerifyDirectoryReconciler{
 		Client: mgr.GetClient(),

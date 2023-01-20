@@ -27,5 +27,5 @@ data:
 
       admin: 
         dn: cn=root
-        pwd: passw0rd1
+        pwd: secret:isvd-secret/admin-password
 
