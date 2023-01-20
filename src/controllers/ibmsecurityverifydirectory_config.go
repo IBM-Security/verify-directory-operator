@@ -35,6 +35,9 @@ import (
 func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 			h *RequestHandle) (error) {
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "getServerConfig")...)
+
 	/*
 	 * Retrieve the ConfigMap which contains the server configuration.
 	 */
@@ -48,8 +51,14 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 			config)
 
 	if err != nil {
+		r.Log.Error(err, "Failed to retrieve the server ConfigMap.",
+				r.createLogParams(h, "Name", name)...)
+
 		return err
 	}
+
+	r.Log.V(1).Info("Retrieved the server ConfigMap", 
+				r.createLogParams(h, "Map", config)...)
 
 	/*
 	 * Parse the YAML configuration into a map.  Unfortunately it is not
@@ -70,8 +79,17 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	if ! ok {
 		h.requeueOnError = false
 		
-		return errors.New("The server configuration cannot be parsed.")
+		err = errors.New("The server configuration cannot be parsed.")
+
+		r.Log.Error(err, "Failed to unmarshal the ConfigMap data.",
+				r.createLogParams(h, "Name", name, "Key", key, 
+									"Data", config.Data[key])...)
+
+		return err
 	}
+
+	r.Log.V(1).Info("Processed the server ConfigMap", 
+				r.createLogParams(h, "Data", body)...)
 
 	/*
 	 * Retrieve the general.ports.ldap configuration data.  
@@ -83,14 +101,23 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"}, 
 									true, h.directory.Namespace)
 
+	r.Log.V(1).Info("Retrieved the LDAP port configuration.", 
+				r.createLogParams(h, "Port", ldap)...)
+
 	if ldap != nil {
 		iport, ok := ldap.(int)
 
 		if ! ok {
 			h.requeueOnError = false
 
-			return errors.New(
+			err = errors.New(
 						"The general.ports.ldap configuration is incorrect.")
+
+			r.Log.Error(err, "Failed to process the ConfigMap data.",
+				r.createLogParams(h, "Name", name, "Key", key, 
+									"Data", ldap)...)
+
+			return err
 		}
 
 		h.config.port = int32(iport)
@@ -108,14 +135,23 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 							body, []string{"general","ports","ldaps"}, 
 							true, h.directory.Namespace)
 
+			r.Log.V(1).Info("LDAP port is disabled, retrieved the LDAPS port.", 
+				r.createLogParams(h, "Port", ldaps)...)
+
 			if ldaps != nil {
 				iport, ok := ldaps.(int)
 
 				if ! ok {
 					h.requeueOnError = false
 
-					return errors.New(
+					err = errors.New(
 						"The general.ports.ldaps configuration is incorrect.")
+
+					r.Log.Error(err, "Failed to process the ConfigMap data.",
+						r.createLogParams(h, "Name", name, "Key", key, 
+									"Data", ldaps)...)
+
+					return err
 				}
 
 				h.config.port = int32(iport)
@@ -131,10 +167,18 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 						[]string{"general","license","key"}, 
 						false, h.directory.Namespace)
 
+	r.Log.V(1).Info("Retrieved the license key.", 
+				r.createLogParams(h, "License.Key", licenseKey)...)
+
 	if licenseKey == nil {
 		h.requeueOnError = false
 
-		return errors.New("The general.license.key configuration is missing.")
+		err = errors.New("The general.license.key configuration is missing.")
+
+		r.Log.Error(err, "Failed to process the ConfigMap data.",
+						r.createLogParams(h, "Name", name, "Key", key)...)
+
+		return err
 	}
 
 	h.config.licenseKey = licenseKey.(string)
@@ -145,6 +189,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 
 	adminDn := utils.GetYamlValue(body, []string{"general","admin","dn"}, 
 						false, h.directory.Namespace)
+
+	r.Log.V(1).Info("Retrieved the admin DN.", 
+				r.createLogParams(h, "Admin.DN", adminDn)...)
 
 	if adminDn == nil {
 		h.config.adminDn = "cn=root"
@@ -163,7 +210,13 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	if adminPwd == nil {
 		h.requeueOnError = false
 
-		return errors.New("The general.admin.pwd configuration is missing.")
+		err = errors.New("The general.admin.pwd configuration is missing.")
+
+		r.Log.Error(err, "Failed to process the ConfigMap data.",
+						r.createLogParams(h, "Name", name, "Key", key)...)
+
+		return err
+
 	}
 
 	h.config.adminPwd = adminPwd.(string)
@@ -174,7 +227,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * extract each of the dn's from the suffixes entry.
 	 */
 
-	h.config.suffixes, err = r.getConfigSuffixes(body, h.directory.Namespace)
+	h.config.suffixes, err = r.getConfigSuffixes(h, body, h.directory.Namespace)
 
 	if err != nil {
 		h.requeueOnError = false
@@ -201,14 +254,29 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
-					body interface{}, namespace string) ([]string, error) {
+					h         *RequestHandle,
+					body      interface{}, 
+					namespace string) ([]string, error) {
+
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "getConfigSuffixes")...)
+
 	var suffixes []string
 
 	entries := utils.GetYamlValue(body, []string{"server","suffixes"}, 
 						false, namespace)
 
+	r.Log.V(1).Info("Retrieved the server suffixes.", 
+				r.createLogParams(h, "Suffixes", entries)...)
+
 	if entries == nil {
-		return nil, errors.New("The server.suffixes configuration is missing.")
+		err := errors.New("The server.suffixes configuration is missing.")
+
+		r.Log.Error(err, "Failed to retrieve the config suffixes.",
+						r.createLogParams(h)...)
+
+
+		return nil, err
 	}
 
 	/*
@@ -218,8 +286,12 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 	suffixEntries, ok := entries.([]interface{}) 
 
 	if !ok {
-		return nil, errors.New(
-						"The server.suffixes configuration is incorrect.")
+		err := errors.New("The server.suffixes configuration is incorrect.")
+
+		r.Log.Error(err, "Failed to retrieve the config suffixes.",
+						r.createLogParams(h, "suffixes", suffixEntries)...)
+
+		return nil, err
 	}
 
 	/*
@@ -230,16 +302,31 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 	for _, entry := range suffixEntries {
 		suffixEntry, ok := entry.(map[string]interface{}) 
 
+		r.Log.V(1).Info("Processing a suffix entry.", 
+				r.createLogParams(h, "Suffix", suffixEntry)...)
+
 		if !ok {
-			return nil, errors.New(
-						"The server.suffixes configuration is incorrect.")
+			err := errors.New("The server.suffixes configuration is incorrect.")
+
+			r.Log.Error(err, "Failed to retrieve the config suffixes.",
+						r.createLogParams(h, "suffix", suffixEntry)...)
+
+			return nil, err
 		}
 
 		dn := utils.GetYamlValue(suffixEntry, []string{"dn"}, false, namespace)
 
+		r.Log.V(1).Info("Found a DN for the suffix.", 
+				r.createLogParams(h, "Suffix", suffixEntry, "DN", dn)...)
+
 		if !ok {
-			return nil, errors.New(
-						"The server.suffixes configuration is incorrect.")
+			err := errors.New("The server.suffixes configuration is incorrect.")
+
+			r.Log.Error(err, "Failed to retrieve the config suffixes.",
+						r.createLogParams(h, "suffix", suffixEntry, 
+											"dn", dn)...)
+
+			return nil, err
 		}
 
 		suffixes = append(suffixes, dn.(string))

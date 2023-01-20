@@ -38,6 +38,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplicas(
 
 	err = nil
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "deleteReplicas")...)	
+
 	/*
 	 * Create a map of the to-be-deleted PVCs.
 	 */
@@ -95,6 +98,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 			pvcName    string,
 			waitOnPod  bool) (err error)  {
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "deleteReplica",
+						"PVC.Name", pvcName, "Waiting", waitOnPod)...)	
+
 	podName := r.getReplicaPodName(h.directory, pvcName)
 
 	/*
@@ -108,6 +115,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 			Labels:    utils.LabelsForApp(h.directory.Name, pvcName),
 		},
 	}
+
+	r.Log.V(1).Info("Deleting a service.", "Service", service)
 
 	err = r.Delete(h.ctx, service)
 
@@ -127,6 +136,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 		},
 	}
 
+	r.Log.V(1).Info("Deleting a pod.", "Pod", pod)
+
 	err = r.Delete(h.ctx, pod)
 
 	if err != nil {
@@ -142,7 +153,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplica(
 					r.createLogParams(h, "Pod.Name", podName)...)
 
 		err = wait.PollImmediate(time.Second, time.Duration(300) * time.Second, 
-					r.isPodOpComplete(h.ctx, h.req.Namespace, podName, false))
+					r.isPodOpComplete(h, podName, false))
 
 		if err != nil {
 			r.Log.Error(err, 

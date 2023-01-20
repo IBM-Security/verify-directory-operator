@@ -39,6 +39,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 	var err error = nil
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "createReplicas")...)
+
 	/*
 	 * Don't do anything here if there is nothing to be added.
 	 */
@@ -61,6 +64,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 			principal = key
 			break
 		}
+
+		r.Log.V(1).Info("Using a new principal.", 
+			r.createLogParams(h, "Principal", principal)...)
 
 	} else {
 		principal, toBeAdded = toBeAdded[0], toBeAdded[1:]
@@ -123,7 +129,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 		if err != nil {
 			h.requeueOnError = false
 
-			return  nil, err
+			return nil, err
 		}
 	}
 
@@ -297,6 +303,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 			principalPvc string,
 			replicaPvc   string) (err error) {
 
+	r.Log.V(1).Info("Entering a function", 
+			r.createLogParams(h, "Function", "seedReplica",
+				"Principal.PVC", principalPvc, "Replica.PVC", replicaPvc)...)
+
 	/*
 	 * Create the seed job which is used to seed the new replica with the
 	 * data from the principal.
@@ -422,6 +432,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 	r.Log.Info("Creating a new seed job", 
 						r.createLogParams(h, "Job.Name", job.Name)...)
 
+	r.Log.V(1).Info("Seed job details", 
+				r.createLogParams(h, "Details", job)...)
+
 	err = r.Create(h.ctx, job)
 
 	if err != nil {
@@ -446,6 +459,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreements(
 			principalPvc string,
 			replicaPvc   string,
 			existing     map[string]string) (err error) {
+
+	r.Log.V(1).Info("Entering a function", 
+			r.createLogParams(h, "Function", "createReplicationAgreements",
+				"Principal.PVC", principalPvc, "Replica.PVC", replicaPvc)...)
 
 	/*
 	 * Set up the replication agreement for every existing pod to this pod.
@@ -530,6 +547,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreement(
 func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 			h       *RequestHandle,
 			pvcName string) (string, error) {
+
+	r.Log.V(1).Info("Entering a function", 
+		r.createLogParams(h, "Function", "deployReplica", "PVC", pvcName)...)
 
 	podName := r.getReplicaPodName(h.directory, pvcName)
 
@@ -667,6 +687,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployReplica(
 
 	r.Log.Info("Creating a new pod", 
 						r.createLogParams(h, "Pod.Name", pod.Name)...)
+
+	r.Log.V(1).Info("Pod details", 
+				r.createLogParams(h, "Details", pod)...)
 
 	err := r.Create(h.ctx, pod)
 

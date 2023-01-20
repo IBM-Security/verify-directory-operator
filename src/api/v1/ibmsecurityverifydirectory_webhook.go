@@ -40,7 +40,7 @@ import (
  * The following log object is for logging in this package.
  */
 
-var logger = logf.Log.WithName("ibmsecurityverifydirectory-resource")
+var logger = logf.Log.WithName("webhook").WithName("IBMSecurityVerifyDirectory")
 
 /*
  * The following object allows us to access the Kubernetes API.

@@ -19,7 +19,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -91,6 +90,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 			key          string,
 			value        string) (err error) {
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "createConfigMap",
+						"Map.Name", mapName, "Exists", exists, "Key", key,
+						"Value", value)...)	
+
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mapName,
@@ -145,6 +149,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteConfigMap(
 			h            *RequestHandle,
 			mapName      string) (err error) {
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "deleteConfigMap",
+						"Map.Name", mapName)...)	
+
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mapName,
@@ -173,16 +181,18 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteConfigMap(
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) isJobComplete(
-				ctx          context.Context,
-				namespace    string, 
-				podName      string) wait.ConditionFunc {
+				h         *RequestHandle,
+				podName   string) wait.ConditionFunc {
 
 	return func() (bool, error) {
 		job := &batchv1.Job{}
-		err	:= r.Get(ctx, 
+		err	:= r.Get(h.ctx, 
 					types.NamespacedName{
 						Name:	   podName,
-						Namespace: namespace }, job)
+						Namespace: h.directory.Namespace }, job)
+
+		r.Log.V(1).Info("Checking if a job has completed", 
+				r.createLogParams(h, "Job", job)...)
 
 		if err != nil {
 			return false, nil
@@ -208,17 +218,19 @@ func (r *IBMSecurityVerifyDirectoryReconciler) isJobComplete(
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) isPodOpComplete(
-				ctx          context.Context,
-				namespace    string, 
+				h            *RequestHandle,
 				podName      string,
 				waitForStart bool) wait.ConditionFunc {
 
 	return func() (bool, error) {
 		pod := &corev1.Pod{}
-		err	:= r.Get(ctx, 
+		err	:= r.Get(h.ctx, 
 					types.NamespacedName{
 						Name:	   podName,
-						Namespace: namespace }, pod)
+						Namespace: h.directory.Namespace }, pod)
+
+		r.Log.V(1).Info("Checking if a Pod operation has completed", 
+			r.createLogParams(h, "Wait.For.Start", waitForStart, "Pod", pod)...)
 
 		/*
 		 * If we are waiting for the pod to stop we can return immediately
@@ -270,7 +282,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) waitForPod(
 					r.createLogParams(h, "Pod.Name", name)...)
 
 	err = wait.PollImmediate(time.Second, time.Duration(300) * time.Second, 
-					r.isPodOpComplete(h.ctx, h.directory.Namespace, name, true))
+					r.isPodOpComplete(h, name, true))
 
 	if err != nil {
  		r.Log.Error(err, 
@@ -301,7 +313,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) waitForJob(
 					r.createLogParams(h, "Job.Name", name)...)
 
 	err = wait.PollImmediate(time.Second, time.Duration(300) * time.Second, 
-					r.isJobComplete(h.ctx, h.directory.Namespace, name))
+					r.isJobComplete(h, name))
 
 	if err != nil {
  		r.Log.Error(err, 
@@ -325,6 +337,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 			podName    string,
 			serverPort int32,
 			pvcName    string) (error) {
+
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "createClusterService",
+						"Pod.Name", podName, "Port", serverPort,
+						"PVC.Name", pvcName)...)	
 
 	/*
 	 * Initialise the service structure.
@@ -359,6 +376,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 
 	r.Log.Info("Creating a new service for the pod", 
 				r.createLogParams(h, "Pod.Name", podName)...)
+
+	r.Log.V(1).Info("Service details", 
+			r.createLogParams(h, "Service", service)...)
 
 	err := r.Create(h.ctx, service)
 
@@ -437,6 +457,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) executeCommand(
 
 		return err
 	}
+
+	r.Log.V(1).Info("Command Results", 
+			r.createLogParams(h, "Pod", pod, "Command", command,
+				"stdout", stdout.String(), "stderr", stderr.String())...)
 
 	return nil
 }

@@ -47,6 +47,9 @@ import (
 func (r *IBMSecurityVerifyDirectoryReconciler) deployProxy(
 			h *RequestHandle) (error) {
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "deleteProxy")...)
+
 	/*
 	 * Retrieve the ConfigMap which contains the server configuration.  We
 	 * convert the YAML representation into JSON as it is easier to process
@@ -107,6 +110,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deployProxy(
 func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 			h *RequestHandle) (json string, port int32, err error) {
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "getProxyJson")...)
+
 	/*
 	 * Retrieve the ConfigMap for the proxy.
 	 */
@@ -126,6 +132,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 		return 
 	}
 
+	r.Log.V(1).Info("Retrieved the proxy base configuration.", 
+				r.createLogParams(h, "Name", name, "Data", config)...)
+
 	/*
 	 * Convert the convert map data to JSON.
 	 */
@@ -142,6 +151,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 	}
 
 	json = string(data)
+
+	r.Log.V(1).Info("Retrieved the proxy base data.", 
+				r.createLogParams(h, "Name", name, "Key", key, "Data", json)...)
 
 	/*
 	 * Determine the port which will be used by the proxy.
@@ -182,6 +194,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"}, 
 						true, h.directory.Namespace)
 
+	r.Log.V(1).Info("Retrieved the proxy LDAP port configuration.", 
+				r.createLogParams(h, "Port", ldap)...)
+
 	if ldap != nil {
 		iport, ok := ldap.(int)
 
@@ -207,6 +222,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 			ldaps := utils.GetYamlValue(
 							body, []string{"general","ports","ldaps"}, 
 							true, h.directory.Namespace)
+
+			r.Log.V(1).Info("Retrieved the proxy LDAPS port configuration.", 
+				r.createLogParams(h, "Port", ldaps)...)
 
 			if ldaps != nil {
 				iport, ok := ldaps.(int)
@@ -237,6 +255,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 			h    *RequestHandle,
 			json string) (yamlConfig string, err error) {
+
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "constructProxyYaml",
+						"JSON", json)...)
 
 	/*
 	 * Remove the closing '}' from the json string.
@@ -303,6 +325,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 	suffixes.WriteString("[")
 
 	for idx, suffix := range h.config.suffixes {
+		r.Log.V(1).Info("Adding a suffix to the proxy configuration.", 
+				r.createLogParams(h, "Suffix", suffix)...)
+
 		if idx != 0 {
 			suffixes.WriteString(",")
 		}
@@ -341,6 +366,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 	serverGroups.WriteString("[ { \"name\": \"proxy\", \"servers\": [")
 
 	for idx, pod := range names {
+		r.Log.V(1).Info("Adding a server to the proxy configuration.", 
+				r.createLogParams(h, "Pod", pod)...)
+
 		if idx != 0 {
 			serverGroups.WriteString(",")
 		}
@@ -384,6 +412,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 
 	yamlConfig = string(yamlBytes)
 
+	r.Log.V(1).Info("Constructed the proxy configuration.", 
+				r.createLogParams(h, "YAML", yamlConfig)...)
+
 	return
 }
 
@@ -397,6 +428,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 			h    *RequestHandle,
 			yaml string) (updated bool, err error) {
+
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "saveProxyConfig",
+						"YAML", yaml)...)
 
 	name := utils.GetProxyConfigMapName(h.directory.Name)
 
@@ -417,6 +452,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 		return
 	}
 
+	r.Log.V(1).Info("Retrieved the existing proxy configuration.", 
+				r.createLogParams(h, "ConfigMap", configMap)...)
+
 	/*
 	 * If the ConfigMap already exists we now need to see whether the
 	 * configuration data has changed or not.
@@ -426,6 +464,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 
 	if err == nil {
 		if yaml == configMap.Data[utils.ProxyCMKey] {
+			r.Log.V(1).Info("The proxy configuration has not changed.", 
+				r.createLogParams(h)...)
+
 			updated = false
 
 			return
@@ -461,6 +502,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 			h    *RequestHandle,
 			port int32) (err error) {
 
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "createProxyDeployment",
+						"Port", port)...)
+
 	name := utils.GetProxyDeploymentName(h.directory.Name)
 
 	/*
@@ -481,6 +526,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 		return
 	}
 
+	r.Log.V(1).Info("Retrieved the existing proxy deployment details.", 
+				r.createLogParams(h, "Deployment", dep)...)
+
 	if err == nil {
 		/*
 		 * The deployment already exists and so we just need to perform a 
@@ -496,6 +544,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 
 		dep.Spec.Template.ObjectMeta.Annotations[annotation] = 
 							time.Now().Format("20060102150405")
+
+		r.Log.V(1).Info("Restarting the proxy deployment.", 
+				r.createLogParams(h, "Deployment", dep)...)
 
 		err = r.Patch(h.ctx, dep, patch)
 
@@ -677,6 +728,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 		r.Log.Info("Creating a new proxy deployment", 
 						r.createLogParams(h, "Deployment.Name", dep.Name)...)
 
+		r.Log.V(1).Info("Proxy deployment details.", 
+				r.createLogParams(h, "Deployment", dep)...)
+
 		err = r.Create(h.ctx, dep)
 
 		if err != nil {
@@ -720,6 +774,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 
 		r.Log.Info("Creating a new service for the proxy", 
 				r.createLogParams(h, "Deployment.Name", name)...)
+
+		r.Log.V(1).Info("Proxy service details.", 
+				r.createLogParams(h, "Service", service)...)
 
 		err := r.Create(h.ctx, service)
 

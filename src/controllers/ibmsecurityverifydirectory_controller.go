@@ -118,7 +118,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 		requeueOnError: true,
 	}
 
-	r.Log.V(9).Info("Entering a function", 
+	r.Log.V(1).Info("Entering a function", 
 				r.createLogParams(&h, "Function", "Reconcile")...)
 
 	/*
@@ -150,6 +150,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 
 		return ctrl.Result{}, r.reconcileError(&h, err)
 	}
+
+	r.Log.V(1).Info("Reconciling a document", 
+				r.createLogParams(&h, "Document", h.directory)...)
 
 	/*
 	 * We now need to potentially create or update the deployment.
@@ -326,6 +329,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) setCondition(
 		condition.Status  = metav1.ConditionTrue
 	}
 
+	r.Log.V(1).Info("Setting a condition", 
+				r.createLogParams(h, "Condition", condition)...)
+
 	meta.SetStatusCondition(&h.directory.Status.Conditions, condition)
 
 	if err := r.Status().Update(h.ctx, h.directory); err != nil {
@@ -352,6 +358,9 @@ func (r *IBMSecurityVerifyDirectoryReconciler) setCondition(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getExistingPods(
 					h *RequestHandle) (map[string]string, error) {
+
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "getExistingPods")...)
 
 	pods := make(map[string]string)
 
@@ -386,6 +395,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getExistingPods(
 func (r *IBMSecurityVerifyDirectoryReconciler) analyseExistingPods(
 			h        *RequestHandle,
 			existing map[string]string) ([]string, []string) {
+
+	r.Log.V(1).Info("Entering a function", 
+				r.createLogParams(h, "Function", "analyseExistingPods",
+						"Existing Pods", existing)...)
 
 	var toBeDeleted []string
 	var toBeAdded   []string
