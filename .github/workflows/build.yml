@@ -83,7 +83,6 @@ jobs:
 
       # Perform a docker login to ICR.
       - name: Login to ICR
-        if: startsWith(github.ref, 'refs/tags/')
         env: 
           API_KEY: ${{ secrets.IBM_CLOUD_API_KEY}}
         run: |
@@ -103,15 +102,6 @@ jobs:
           ibmcloud cr login --client docker
           ibmcloud cr region-set global
 
-      # Perform a docker login to artifactory.
-      - name: Login to Artifactory
-        if: (!startsWith(github.ref, 'refs/tags/'))
-        uses: docker/login-action@v1
-        with:
-          registry: ${{ secrets.ARTIFACTORY_SERVER  }}
-          username: ${{ secrets.ARTIFACTORY_USER    }}
-          password: ${{ secrets.ARTIFACTORY_API_KEY }}
-
       # Installing Kubernetes...
       - name: Setting up Kubernetes.
         run: |
@@ -126,19 +116,17 @@ jobs:
 
       # Perform the build.
       - name: Perform the build.
-        env: 
-          ARTIFACTORY_SERVER: ${{ secrets.ARTIFACTORY_SERVER }}
         run: |
           cd src
 
+          export IMAGE_TAG_BASE=icr.io/isvd/verify-directory-operator
+
           case $GITHUB_REF in 
             refs/tags/v*)
-              export IMAGE_TAG_BASE=icr.io/isvd/verify-directory-operator
               export VERSION=`echo $GITHUB_REF | sed "s|refs/tags/v||g"`
               export DO_PUSH=1
               ;;
             *)
-              export IMAGE_TAG_BASE=${ARTIFACTORY_SERVER}/verify-directory-operator
               export VERSION=0.0.0
 
               if [ $GITHUB_REF = "refs/heads/master" ] ; then
@@ -207,3 +195,4 @@ jobs:
       - name: Delete Kubernetes cluster
         run: |
           kind delete cluster 
+
