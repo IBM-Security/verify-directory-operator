@@ -845,7 +845,14 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 	logger.V(1).Info("Connecting to the LDAP server", 
 			r.createLogParams("Address", address, "Port", port)...)
 
-	l, err := ldap.DialURL(fmt.Sprintf("ldap://%s:%d", address, port))
+	var l *ldap.Conn
+
+	if secure {
+		l, err = ldap.DialURL(fmt.Sprintf("ldaps://%s:%d", address, port), 
+				ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true}))
+	} else {
+		l, err = ldap.DialURL(fmt.Sprintf("ldap://%s:%d", address, port))
+	}
 
 	if err != nil {
 		logger.Error(err, "Failed to connect to the LDAP proxy", 
@@ -854,18 +861,6 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 		return
 	}
 	defer l.Close()
-
-	if secure {
-		err = l.StartTLS(&tls.Config{InsecureSkipVerify: true})
-
-		if err != nil {
-			logger.Error(err, 
-				"Failed to start a TLS session with the LDAP proxy", 
-				r.createLogParams()...)
-
-			return
-		}
-	}
 
 	/*
 	 * Bind to the server.

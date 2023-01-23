@@ -135,7 +135,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 			 * been deleted.
   			 */
 
-			r.Log.Info("Resource not found due to it having been deleted", 
+			r.Log.Info(
+				"Resource not found most likely due to it having been deleted", 
 								r.createLogParams(&h)...)
 
 			err = nil
@@ -153,10 +154,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 
 	r.Log.V(1).Info("Reconciling a document", 
 				r.createLogParams(&h, "Document", h.directory)...)
-
-	/*
-	 * We now need to potentially create or update the deployment.
-	 */
 
 	/*
 	 * Retrieve the list of existing pods for the deployment.

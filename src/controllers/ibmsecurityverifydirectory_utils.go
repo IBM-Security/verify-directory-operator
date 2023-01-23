@@ -28,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
@@ -86,13 +88,12 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getSeedJobName(
 func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 			h            *RequestHandle,
 			mapName      string,
-			exists       bool,
 			key          string,
 			value        string) (err error) {
 
 	r.Log.V(1).Info("Entering a function", 
 				r.createLogParams(h, "Function", "createConfigMap",
-						"Map.Name", mapName, "Exists", exists, "Key", key,
+						"Map.Name", mapName, "Key", key,
 						"Value", value)...)	
 
 	configMap := &corev1.ConfigMap{
@@ -106,29 +107,27 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 		},
 	}
 
-	if exists {
-		ctrl.SetControllerReference(h.directory, configMap, r.Scheme)
-
-		r.Log.Info("Updating an existing ConfigMap", 
+	r.Log.Info("Creating a new ConfigMap", 
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
-		err = r.Update(h.ctx, configMap)
+	ctrl.SetControllerReference(h.directory, configMap, r.Scheme)
 
-		if err != nil {
-			r.Log.Error(err, "Failed to update the ConfigMap",
+	err = r.Create(h.ctx, configMap)
+
+	if err != nil {
+		if k8serrors.IsAlreadyExists(err) {
+			r.Log.Info("Updating an existing ConfigMap", 
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
-			return
-		}
-	} else {
-		ctrl.SetControllerReference(h.directory, configMap, r.Scheme)
+			err = r.Update(h.ctx, configMap)
 
-		r.Log.Info("Creating a new ConfigMap", 
+			if err != nil {
+				r.Log.Error(err, "Failed to update the ConfigMap",
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
-		err = r.Create(h.ctx, configMap)
-
-		if err != nil {
+				return
+			}
+		} else {
 			r.Log.Error(err, "Failed to create the new ConfigMap",
 						r.createLogParams(h, "ConfigMap.Name", mapName)...)
 
@@ -278,10 +277,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) waitForPod(
 				h    *RequestHandle,
 				name string) (err error) {
 
-	r.Log.Info("Waiting for the pod to become ready", 
+	r.Log.Info("Waiting up to 10 minutes for the pod to become ready", 
 					r.createLogParams(h, "Pod.Name", name)...)
 
-	err = wait.PollImmediate(time.Second, time.Duration(300) * time.Second, 
+	err = wait.PollImmediate(time.Second, time.Duration(600) * time.Second, 
 					r.isPodOpComplete(h, name, true))
 
 	if err != nil {
@@ -309,10 +308,10 @@ func (r *IBMSecurityVerifyDirectoryReconciler) waitForJob(
 	 * Wait for the job to finish.
 	 */
 
-	r.Log.Info("Waiting for the job to finish", 
+	r.Log.Info("Waiting up to 10 minutes for the job to finish", 
 					r.createLogParams(h, "Job.Name", name)...)
 
-	err = wait.PollImmediate(time.Second, time.Duration(300) * time.Second, 
+	err = wait.PollImmediate(time.Second, time.Duration(600) * time.Second, 
 					r.isJobComplete(h, name))
 
 	if err != nil {

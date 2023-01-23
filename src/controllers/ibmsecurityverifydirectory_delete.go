@@ -77,7 +77,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteReplicas(
 		 * Delete the pod and service.
 		 */
 
-		err = r.deleteReplica(h, pvcName, true)
+		err = r.deleteReplica(h, pvcName, false)
 
 		if err != nil {
 			return

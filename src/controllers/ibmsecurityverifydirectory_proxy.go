@@ -8,7 +8,7 @@ package controllers
 
 /*
  * This file contains the functions which are used by the controller to handle
- * the creation of a deployment/replica.
+ * the creation of the LDAP proxy.
  */
 
 /*****************************************************************************/
@@ -460,8 +460,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 	 * configuration data has changed or not.
 	 */
 
-	create := true
-
 	if err == nil {
 		if yaml == configMap.Data[utils.ProxyCMKey] {
 			r.Log.V(1).Info("The proxy configuration has not changed.", 
@@ -471,8 +469,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 
 			return
 		}
-
-		create = false
 	}
 
 	/*
@@ -482,7 +478,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 
 	updated = true
 
-	err = r.createConfigMap(h, name, !create, utils.ProxyCMKey, yaml)
+	err = r.createConfigMap(h, name, utils.ProxyCMKey, yaml)
 
 	if err != nil {
 		return

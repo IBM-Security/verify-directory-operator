@@ -155,7 +155,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 
 	seedConfigMapName := r.getSeedConfigMapName(h.directory)
 
-	err = r.createConfigMap(h, seedConfigMapName, false,
+	err = r.createConfigMap(h, seedConfigMapName, 
 			ConfigMapKey, "seed: \n  replica: \n    clean: true\n")
 
 	if err != nil {
@@ -221,7 +221,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicas(
 		existing[pvcName]    = podName
 	}
 
-	for _, podName:= range replicaPods {
+	for _, podName := range replicaPods {
 		err = r.waitForPod(h, podName)
 
 		if err != nil {
@@ -397,7 +397,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) seedReplica(
 
 	var completions  int32 = 1
 	var backOffLimit int32 = 1
-	var ttl          int32 = 30
+	var ttl          int32 = 60
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -505,7 +505,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createReplicationAgreement(
 	portStr       := strconv.Itoa(int(h.config.port))
 
 	/*
-	 * Let's play it safe and delete any pre-existing replication agreement
+	 * Let's play it safe and delete any pre-existing replication agreements
 	 * for this replica.
 	 */
 

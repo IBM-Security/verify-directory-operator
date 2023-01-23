@@ -336,5 +336,12 @@ The server replicas will communicate with each other, and the proxy, using `Clus
 
 In the event that the system fails to deploy an environment, for example due to a misconfiguration of the LDAP server, the environment will be left in the failing state.  This will allow an administrator to examine the log files to help determine and rectify the cause of the failure.  If a deployment is in a failing state it won't be possible to modify, in the environment, the failing 'IBMSecurityVerifyDirectory' document.  The document must first be deleted from the environment.
 
+The `Status.Conditions` field of the 'IBMSecurityVerifyDirectory' document can be examined for information on why the deployment failed.  For example:
+
+```
+kubectl get ibmsecurityverifydirectory.ibm.com/ibmsecurityverifydirectory-sample -o jsonpath='{.status.conditions}'
+[{"lastTransitionTime":"2023-01-22T23:06:29Z","message":"The deployment has been processed.","reason":"DeploymentProgress","status":"False","type":"InProgress"},{"lastTransitionTime":"2023-01-22T23:06:29Z","message":"XXX: Just a temporary error!","reason":"DeploymentCreated","status":"False","type":"Available"}]
+```
+
 To help debug any failures the log of the operator controller can also be examined.    The operator controller will be named something like, `verify-directory-operator-controller-manager-5856c8664c-wnnpm`, and will be in the namespace into which the operator was installed.
 
