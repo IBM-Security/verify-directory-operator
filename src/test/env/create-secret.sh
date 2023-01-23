@@ -13,8 +13,8 @@ fi
 tlspath=`dirname $0`/../certs
 
 kubectl create secret generic isvd-secret --from-literal=license-key=$1 \
-        --from-literal=admin-password=passw0rd1 \
-        --from-literal=replication-password=passw0rd2 \
-        --from-literal=server-key="`cat $tlspath/tls.crt $tlspath/tls.key`" \
-        --from-literal=server-cert="`cat $tlspath/tls.crt`"
+        --from-literal=admin_password=passw0rd1 \
+        --from-literal=replication_password=passw0rd2 \
+        --from-literal=server_key="`cat $tlspath/tls.crt $tlspath/tls.key`" \
+        --from-literal=server_cert="`cat $tlspath/tls.crt`"
 

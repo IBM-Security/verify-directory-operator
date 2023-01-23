@@ -28,18 +28,18 @@ data:
 
       admin: 
         dn: cn=root
-        pwd: secret:isvd-secret/admin-password
+        pwd: secret:isvd-secret/admin_password
 
     keyfile:
       keys:
       - label: "server-key"
-        key: secret:isvd-secret/server-key
+        key: secret:isvd-secret/server_key
 
     server:
       replication:
         admin:
           dn: cn=replcred
-          pwd: secret:isvd-secret/replication-password
+          pwd: secret:isvd-secret/replication_password
 
       suffixes:
         - dn: o=sample

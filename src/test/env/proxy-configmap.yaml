@@ -24,9 +24,9 @@ data:
 
       admin: 
         dn: cn=root
-        pwd: secret:isvd-secret/admin-password
+        pwd: secret:isvd-secret/admin_password
 
     keyfile:
       trusted-certificates:
-      - secret:isvd-secret/server-cert
+      - secret:isvd-secret/server_cert
 
