@@ -914,7 +914,7 @@ func (r *IBMSecurityVerifyDirectory) getPrimaryWriteMasters() (primaries map[str
 	 * Process the search results looking for any primary write masters.
 	 */
 
-	expr := fmt.Sprintf(".*ibm-slapdProxyBackendServerName=%s-(.[^,]*)", 
+	expr := fmt.Sprintf(".*ibm-slapdProxyBackendServerName=%s-(.[^+,]*)", 
 						strings.ToLower(r.Name))
 	re   := regexp.MustCompile(expr)
 

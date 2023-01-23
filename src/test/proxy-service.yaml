@@ -18,6 +18,12 @@ spec:
     name: isvd-proxy-ldap
     protocol: TCP
 
+  - port: 9636
+    targetPort: 9636
+    nodePort: 30636
+    name: isvd-proxy-ldaps
+    protocol: TCP
+
   selector:
     app.kubernetes.io/kind: IBMSecurityVerifyDirectory
     app.kubernetes.io/cr-name: ibmsecurityverifydirectory-sample-proxy

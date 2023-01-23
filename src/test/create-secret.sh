@@ -10,6 +10,11 @@ if [ $# -ne 1 ] ; then
     exit 1
 fi
 
+tlspath=`dirname $0`/certs
+
 kubectl create secret generic isvd-secret --from-literal=license-key=$1 \
-        --from-literal=admin-password=passw0rd1
+        --from-literal=admin-password=passw0rd1 \
+        --from-literal=replication-password=passw0rd2 \
+        --from-literal=server-key="`cat $tlspath/tls.crt $tlspath/tls.key`" \
+        --from-literal=server-cert="`cat $tlspath/tls.crt`"
 

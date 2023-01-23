@@ -7,8 +7,6 @@
 # the custom resource found at 
 #      src/config/samples/ibm_v1_ibmsecurityverifydirectory.yaml
 
-set -e
-
 usage()
 {
     echo "usage: $0 [init <license-key>|clean]"
@@ -57,6 +55,8 @@ if [ "$1" = "clean" ] ; then
 
 elif [ "$1" = "init" ] ; then
 
+    set -e
+
     # Check the command line.
     if [ $# != 2 ] ; then
         usage
@@ -75,9 +75,16 @@ elif [ "$1" = "init" ] ; then
         $root/create-nfs-pvc.sh add $pvc
     done
 
-    # Create the license key secret.
-    echo "Creating the license key secret..."
-    $root/create-license-key-secret.sh $2
+    # Wait for the PVCs.
+    echo "Waiting for the PVCs to be bound..."
+    for pvc in $PVCS; do
+        kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/$pvc \
+                    --timeout=90s
+    done
+
+    # Create the secret.
+    echo "Creating the secret..."
+    $root/create-secret.sh $2
 
     # Process each of the YAML files.
     for yaml in $yaml_files; do

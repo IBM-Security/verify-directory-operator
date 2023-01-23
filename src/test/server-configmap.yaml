@@ -13,7 +13,10 @@ data:
   config.yaml: | 
     general: 
       ports:
-        ldap: 9389
+        ldap: 0
+
+      ssl:
+        cert-label: server-key
 
       json-logging: false
 
@@ -25,13 +28,18 @@ data:
 
       admin: 
         dn: cn=root
-        pwd: passw0rd1
+        pwd: secret:isvd-secret/admin-password
+
+    keyfile:
+      keys:
+      - label: "server-key"
+        key: secret:isvd-secret/server-key
 
     server:
       replication:
         admin:
           dn: cn=replcred
-          pwd: passw0rd2
+          pwd: secret:isvd-secret/replication-password
 
       suffixes:
         - dn: o=sample

@@ -15,7 +15,7 @@ data:
       id: isvd-proxy
 
       ports:
-        ldap: 9389
+        ldap: 0
 
       json-logging: false
 
@@ -28,4 +28,8 @@ data:
       admin: 
         dn: cn=root
         pwd: secret:isvd-secret/admin-password
+
+    keyfile:
+      trusted-certificates:
+      - secret:isvd-secret/server-cert
 
