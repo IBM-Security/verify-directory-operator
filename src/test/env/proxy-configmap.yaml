@@ -14,9 +14,6 @@ data:
     general: 
       id: isvd-proxy
 
-      ports:
-        ldap: 0
-
       json-logging: false
 
       license:
