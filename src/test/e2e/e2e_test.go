@@ -182,8 +182,8 @@ var _ = Describe("verify-directory", Ordered, func() {
 			By("Validating that the operator controller pod is running.")
 			verifyControllerUp := func() error {
 
-				dcmd = exec.Command("kubectl", "get", "pods", "-n", namespace)
-				dpodOutput, _ := utils.Run(cmd)
+				dcmd := exec.Command("kubectl", "get", "pods", "-n", namespace)
+				dpodOutput, _ := utils.Run(dcmd)
 
 				fmt.Printf("get pods: %s\n", dpodOutput)
 
