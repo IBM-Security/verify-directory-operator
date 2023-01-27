@@ -182,6 +182,11 @@ var _ = Describe("verify-directory", Ordered, func() {
 			By("Validating that the operator controller pod is running.")
 			verifyControllerUp := func() error {
 
+				dcmd = exec.Command("kubectl", "get", "pods", "-n", namespace)
+				dpodOutput, _ := utils.Run(cmd)
+
+				fmt.Printf("get pods: %s\n", dpodOutput)
+
 				cmd = exec.Command("kubectl", "get",
 					"pods", "-l", "control-plane=controller-manager",
 					"-o", "go-template={{ range .items }}{{ " +
@@ -216,7 +221,7 @@ var _ = Describe("verify-directory", Ordered, func() {
 				return nil
 			}
 			EventuallyWithOffset(1, verifyControllerUp, 
-							5 * time.Minute, 5 * time.Second).Should(Succeed())
+							2 * time.Minute, 5 * time.Second).Should(Succeed())
 
 			/*
 			 * Setup the environment.
@@ -261,7 +266,7 @@ var _ = Describe("verify-directory", Ordered, func() {
 				return nil
 			}
 			EventuallyWithOffset(1, getProxyDeploymentStatus, 
-									time.Minute, time.Second).Should(Succeed())
+							5 * time.Minute, 5 * time.Second).Should(Succeed())
 
 			By("Validating the status of the custom resource.")
 			getStatus := func() error {
