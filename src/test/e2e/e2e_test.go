@@ -182,11 +182,6 @@ var _ = Describe("verify-directory", Ordered, func() {
 			By("Validating that the operator controller pod is running.")
 			verifyControllerUp := func() error {
 
-				dcmd := exec.Command("kubectl", "get", "pods", "-n", namespace)
-				dpodOutput, _ := utils.Run(dcmd)
-
-				fmt.Printf("get pods: %s\n", dpodOutput)
-
 				cmd = exec.Command("kubectl", "get",
 					"pods", "-l", "control-plane=controller-manager",
 					"-o", "go-template={{ range .items }}{{ " +
@@ -199,8 +194,13 @@ var _ = Describe("verify-directory", Ordered, func() {
 
 				podNames := utils.GetNonEmptyLines(string(podOutput))
 				if len(podNames) != 1 {
+					dcmd := exec.Command(
+									"kubectl", "get", "pods", "-n", namespace)
+					dpodOutput, _ := utils.Run(dcmd)
+
 					return fmt.Errorf("Expected 1 controller pod to be " +
-							"running, but got %d pods.", len(podNames))
+							"running, but got %d pods.  All pods: %s", 
+							len(podNames), dpodOutput)
 				}
 				controllerPodName = podNames[0]
 
