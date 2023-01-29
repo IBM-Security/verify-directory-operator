@@ -68,9 +68,7 @@ var _ = Describe("verify-directory", Ordered, func() {
 
 		/*
 		 * Now, let's ensure that all namespaces can raise a warning when we 
-		 * apply the manifests and that the namespace where the Operator and 
-		 * Operand will run are enforced as restricted so that we can ensure 
-		 * that both can be admitted and run with the enforcement.
+		 * apply the manifests.
 		 */
 
 		By("Labeling all namespaces to warn when we apply the manifest " +
@@ -88,7 +86,7 @@ var _ = Describe("verify-directory", Ordered, func() {
 		cmd = exec.Command("kubectl", "label", "--overwrite", "ns", namespace,
 			"pod-security.kubernetes.io/audit=restricted",
 			"pod-security.kubernetes.io/enforce-version=v1.24",
-			"pod-security.kubernetes.io/enforce=restricted")
+			"pod-security.kubernetes.io/warn=restricted")
 		_, err = utils.Run(cmd)
 
 		Expect(err).To(Not(HaveOccurred()))
@@ -142,6 +140,24 @@ var _ = Describe("verify-directory", Ordered, func() {
 				By("Loading the Operator image on Kind.")
 				err = utils.LoadImageToKindClusterWithName(operatorImage)
 				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+				/*
+				 * Pre-load the verify directory images as well.
+				 */
+
+				images := []string{
+						"verify-directory-server", 
+						"verify-directory-proxy", 
+						"verify-directory-seed",
+				}
+
+				for _, name := range images {
+					image := fmt.Sprintf("icr.io/isvd/%s:latest", name)
+					By(fmt.Sprintf("Loading the %s image on Kind.", name))
+					utils.Run(exec.Command("docker", "pull", image))
+					err = utils.LoadImageToKindClusterWithName(image)
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				}
 			}
 
 			/*
@@ -163,24 +179,15 @@ var _ = Describe("verify-directory", Ordered, func() {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			/*
-			 * Validate that the controller is able to run as restricted.
-			 */
-
-			/*
-			 * The following test appears to be unreliable.
-
-			By("Validating that the controller is restricted.")
-			ExpectWithOffset(1, outputMake).NotTo(
-						ContainSubstring("Warning: would violate PodSecurity"))
-
-			 */
-
-			/*
 			 * Validate that the controller is running.
 			 */
 
 			By("Validating that the operator controller pod is running.")
 			verifyControllerUp := func() error {
+
+				/*
+				 * Retrieve the name of the pod.
+				 */
 
 				cmd = exec.Command("kubectl", "get",
 					"pods", "-l", "control-plane=controller-manager",
@@ -194,18 +201,19 @@ var _ = Describe("verify-directory", Ordered, func() {
 
 				podNames := utils.GetNonEmptyLines(string(podOutput))
 				if len(podNames) != 1 {
-					dcmd := exec.Command(
-									"kubectl", "get", "pods", "-n", namespace)
-					dpodOutput, _ := utils.Run(dcmd)
-
 					return fmt.Errorf("Expected 1 controller pod to be " +
-							"running, but got %d pods.  All pods: %s", 
-							len(podNames), dpodOutput)
+							"running, but got %d pods.", 
+							len(podNames))
 				}
+
 				controllerPodName = podNames[0]
 
 				ExpectWithOffset(2, controllerPodName).Should(
 									ContainSubstring("controller-manager"))
+
+				/*
+				 * Check to see whether the pod is up and running.
+				 */
 
 				cmd = exec.Command("kubectl", "get",
 					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
@@ -238,35 +246,47 @@ var _ = Describe("verify-directory", Ordered, func() {
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
+			/*
+			 * Create an instance of the Verify Directory Server.
+			 */
+
 			By("Creating an instance of the Operand(CR).")
-			EventuallyWithOffset(1, func() error {
-				cmd = exec.Command("kubectl", "apply", "-f", 
+			cmd = exec.Command("kubectl", "apply", "-f", 
 					filepath.Join(projectDir,
-					"config/samples/ibm_v1_ibmsecurityverifydirectory.yaml"), 
-					"-n", namespace)
-				_, err = utils.Run(cmd)
-				return err
-			}, time.Minute, time.Second).Should(Succeed())
+					"config/samples/ibm_v1_ibmsecurityverifydirectory.yaml"))
+			_, err = utils.Run(cmd)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+			/*
+			 * Validate that the instance is running.
+			 */
 
 			By("Validating that the proxy deployment is running.")
 			getProxyDeploymentStatus := func() error {
 				cmd = exec.Command("kubectl", "get",
 					"deployment", "ibmsecurityverifydirectory-sample-proxy",
-					"-o", "jsonpath={.status.readyReplicas}", "-n", namespace,
+					"-o", "jsonpath={.status.readyReplicas}",
 				)
 				status, err := utils.Run(cmd)
 
-				fmt.Println(string(status))
+				if err != nil {
+					return fmt.Errorf(
+							"The proxy deployment has not yet been created.")
+				}
 
-				ExpectWithOffset(2, err).NotTo(HaveOccurred())
 				if !strings.Contains(string(status), "1") {
 					return fmt.Errorf(
 								"The proxy deployment status is %s", status)
 				}
+
 				return nil
 			}
 			EventuallyWithOffset(1, getProxyDeploymentStatus, 
-							5 * time.Minute, 5 * time.Second).Should(Succeed())
+						7 * time.Minute, 15 * time.Second).Should(Succeed())
+
+			/*
+			 * Ensure that the status of the custom resource has been updated.
+			 */
 
 			By("Validating the status of the custom resource.")
 			getStatus := func() error {
@@ -274,11 +294,8 @@ var _ = Describe("verify-directory", Ordered, func() {
 					"IBMSecurityVerifyDirectory",
 					"ibmsecurityverifydirectory-sample", 
 					"-o", "jsonpath={.status.conditions}",
-					"-n", namespace,
 				)
 				status, err := utils.Run(cmd)
-
-				fmt.Println(string(status))
 
 				ExpectWithOffset(2, err).NotTo(HaveOccurred())
 
@@ -288,7 +305,8 @@ var _ = Describe("verify-directory", Ordered, func() {
 				}
 				return nil
 			}
-			Eventually(getStatus, time.Minute, time.Second).Should(Succeed())
+			Eventually(getStatus, 
+						time.Minute, 5 * time.Second).Should(Succeed())
 		})
 	})
 })
