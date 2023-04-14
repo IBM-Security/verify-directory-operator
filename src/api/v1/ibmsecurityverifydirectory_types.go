@@ -133,6 +133,12 @@ type IBMSecurityVerifyDirectoryPods struct {
     // https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
     // +optional
     ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,8,opt,name=serviceAccountName"`
+
+    // SecurityContext defines the security options the container should be run 
+    // with.  
+    // More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+    // +optional
+    SecurityContext corev1.PodSecurityContext `json:"securityContext,omitempty" protobuf:"bytes,15,opt,name=securityContext"`
 }
 
 // IBMSecurityVerifyDirectorySpec defines the desired state of 
