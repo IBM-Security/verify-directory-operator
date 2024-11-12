@@ -33,7 +33,7 @@ import (
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
-			h *RequestHandle) (error) {
+			h *RequestHandle) error {
 
 	r.Log.V(1).Info("Entering a function", 
 				r.createLogParams(h, "Function", "getServerConfig")...)
@@ -46,7 +46,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	key  := h.directory.Spec.Pods.ConfigMap.Server.Key
 
 	config := &corev1.ConfigMap{}
-	err	   := r.Get(h.ctx, 
+	err	:= r.Get(h.ctx, 
 			types.NamespacedName{Name: name, Namespace: h.directory.Namespace}, 
 			config)
 
@@ -63,7 +63,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	/*
 	 * Parse the YAML configuration into a map.  Unfortunately it is not
 	 * easy to parse YAML into a generic structure, and so after we have
-	 * unmarshalled the data we want to iteratively convert the data into 
+	 * unmarshalled the data we want to iteratively convert the data into
 	 * a map of strings.
 	 */
 
@@ -95,7 +95,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	h.config.port   = 9389
 	h.config.secure = false
 
-	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"}, 
+	ldap := utils.GetYamlValue(body, []string{"general", "ports", "ldap"}, 
 									true, h.directory.Namespace)
 
 	r.Log.V(1).Info("Retrieved the LDAP port configuration.", 
@@ -127,7 +127,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 			h.config.port   = 9636
 
 			ldaps := utils.GetYamlValue(
-							body, []string{"general","ports","ldaps"}, 
+							body, []string{"general", "ports", "ldaps"}, 
 							true, h.directory.Namespace)
 
 			r.Log.V(1).Info("LDAP port is disabled, retrieved the LDAPS port.", 
@@ -157,7 +157,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 */
 
 	licenseKey := utils.GetYamlValue(body, 
-						[]string{"general","license","key"}, 
+						[]string{"general", "license", "key"}, 
 						false, h.directory.Namespace)
 
 	r.Log.V(1).Info("Retrieved the license key.", 
@@ -178,7 +178,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 * Retrieve the admin DN.
 	 */
 
-	adminDn := utils.GetYamlValue(body, []string{"general","admin","dn"}, 
+	adminDn := utils.GetYamlValue(body, []string{"general", "admin", "dn"}, 
 						false, h.directory.Namespace)
 
 	r.Log.V(1).Info("Retrieved the admin DN.", 
@@ -195,7 +195,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getServerConfig(
 	 */
 
 	adminPwd := utils.GetYamlValue(body, 
-									[]string{"general","admin","pwd"}, 
+									[]string{"general", "admin", "pwd"}, 
 									false, h.directory.Namespace)
 
 	if adminPwd == nil {
@@ -250,7 +250,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 
 	var suffixes []string
 
-	entries := utils.GetYamlValue(body, []string{"server","suffixes"}, 
+	entries := utils.GetYamlValue(body, []string{"server", "suffixes"}, 
 						false, namespace)
 
 	r.Log.V(1).Info("Retrieved the server suffixes.", 
@@ -270,7 +270,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 	 * The first thing to do is cast the yaml to the correct type.
 	 */
 
-	suffixEntries, ok := entries.([]interface{}) 
+	suffixEntries, ok := entries.([]interface{})
 
 	if !ok {
 		err := errors.New("The server.suffixes configuration is incorrect.")
@@ -287,7 +287,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getConfigSuffixes(
 	 */
 
 	for _, entry := range suffixEntries {
-		suffixEntry, ok := entry.(map[string]interface{}) 
+		suffixEntry, ok := entry.(map[string]interface{})
 
 		r.Log.V(1).Info("Processing a suffix entry.", 
 				r.createLogParams(h, "Suffix", suffixEntry)...)

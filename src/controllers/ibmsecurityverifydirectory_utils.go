@@ -7,7 +7,7 @@
 package controllers
 
 /*
- * This file contains the some utility style functions which are used by the 
+ * This file contains the some utility style functions which are used by the
  * controller.
  */
 
@@ -19,6 +19,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -56,12 +57,128 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getReplicaPodName(
 /*****************************************************************************/
 
 /*
- * The following function is used to generate the ConfigMap name for the 
+ * The following function is used to get the replica controller pod name.
+ */
+func (r *IBMSecurityVerifyDirectoryReconciler) getReplicaSetPodName(
+        h *RequestHandle,
+        replicaName string) string {
+
+        r.Log.V(1).Info("Entering a function",
+                r.createLogParams(h, "Function", "getReplicaSetPodName",
+                        "Replica.Name", replicaName)...)
+
+        // Get cluster config
+        clusterconfig := ctrl.GetConfigOrDie()
+
+        // Create a Kubernetes client
+        clientset := kubernetes.NewForConfigOrDie(clusterconfig)
+
+        // Get the replicaset
+        replicaset, err := clientset.AppsV1().ReplicaSets(h.directory.Namespace).Get(context.Background(), replicaName, metav1.GetOptions{})
+        if err != nil {
+                r.Log.Error(err, "Failed to get the replicaset",
+                        r.createLogParams(h, "Replica.Name", replicaName)...)
+        }
+
+       r.Log.Info("Waiting up to 2 minutes for the pod to show up",
+                r.createLogParams(h, "Replica.Name", replicaName)...)
+
+        r.Log.V(1).Info("Replica details",
+                r.createLogParams(h, "Details", replicaName)...)
+	
+	retryCount := 60             // Adjust retry count as needed
+        backoff := time.Second * 2   // Initial backoff time
+        for i := 0; i < retryCount; i++ {
+
+          r.Log.Info("Getting available pods",
+                  r.createLogParams(h, "Available pods", replicaset.Status.FullyLabeledReplicas)...)
+
+          r.Log.V(1).Info("Replica details",
+                  r.createLogParams(h, "Details", replicaName)...)
+
+          if replicaset.Status.FullyLabeledReplicas >= 1 {
+             r.Log.Info("Pod is available for...",
+                      r.createLogParams(h, "Replica.Name", replicaName)...)
+
+             r.Log.V(1).Info("Replica details",
+                      r.createLogParams(h, "Details", replicaName)...)
+             break
+          }
+
+          time.Sleep(backoff)
+
+          // Get the replicaset
+          replicaset, err = clientset.AppsV1().ReplicaSets(h.directory.Namespace).Get(context.Background(), replicaName, metav1.GetOptions{})
+          if err != nil {
+                r.Log.Error(err, "Failed to get the replicaset",
+                        r.createLogParams(h, "Replica.Name", replicaName)...)
+          }
+
+        }
+
+        // Get the replicaset's labels
+        selector, err := metav1.LabelSelectorAsSelector(replicaset.Spec.Selector)
+        if err != nil {
+                r.Log.Error(err, "Failed to get the replicaset labels",
+                        r.createLogParams(h, "Replica.Name", replicaName)...)
+        }
+
+        // Use the app's label selector name. Remember this should match with
+        // the controller selector's matchLabels.
+        options := metav1.ListOptions{
+                LabelSelector: fmt.Sprintf("%s", selector),
+        }
+
+        // Get the pods list controlled by the replicaset
+
+        r.Log.Info("Getting the pod",
+                r.createLogParams(h, "Pod.Label", selector)...)
+
+        r.Log.V(1).Info("Replica details",
+                r.createLogParams(h, "Details", replicaName)...)
+
+        podList, _ := clientset.CoreV1().Pods(h.directory.Namespace).List(context.Background(), options)
+
+        // Get the name of the first pod
+        podname := (*podList).Items[0]
+
+        r.Log.Info("Returning the pod name",
+                r.createLogParams(h, "Pod.Name", podname.Name)...)
+
+        r.Log.V(1).Info("Replica details",
+                r.createLogParams(h, "Details", replicaName)...)
+
+        return fmt.Sprintf("%s", podname.Name)
+}
+
+/*****************************************************************************/
+
+/*
+ * The following function is used to generate the deployment name for the pod.
+ */
+
+func (r *IBMSecurityVerifyDirectoryReconciler) getReplicaDeploymentName(
+			podname    string) string {
+	// Find the index of the last dash.
+        lastDashIndex := strings.LastIndex(podname, "-")
+
+        var str string
+
+       // Slice the string from the beginning to the last dash index.
+	str = podname[:lastDashIndex]
+
+	return str
+}
+
+/*****************************************************************************/
+
+/*
+ * The following function is used to generate the ConfigMap name for the
  * directory deployment.
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getSeedConfigMapName(
-			directory  *ibmv1.IBMSecurityVerifyDirectory) (string) {
+			directory  *ibmv1.IBMSecurityVerifyDirectory) string {
 	return strings.ToLower(fmt.Sprintf("%s-seed", directory.Name))
 }
 
@@ -74,7 +191,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getSeedConfigMapName(
 
 func (r *IBMSecurityVerifyDirectoryReconciler) getSeedJobName(
 			directory    *ibmv1.IBMSecurityVerifyDirectory,
-			pvc          string) (string) {
+			pvc          string) string {
 	return fmt.Sprintf("%s-seed", r.getReplicaPodName(directory, pvc))
 }
 
@@ -94,7 +211,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createConfigMap(
 	r.Log.V(1).Info("Entering a function", 
 				r.createLogParams(h, "Function", "createConfigMap",
 						"Map.Name", mapName, "Key", key,
-						"Value", value)...)	
+						"Value", value)...)
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -150,7 +267,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteConfigMap(
 
 	r.Log.V(1).Info("Entering a function", 
 				r.createLogParams(h, "Function", "deleteConfigMap",
-						"Map.Name", mapName)...)	
+						"Map.Name", mapName)...)
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -163,7 +280,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) deleteConfigMap(
 	err = r.Delete(h.ctx, configMap)
 
 	if err != nil {
-		return 
+		return
 	}
 
 	return
@@ -186,7 +303,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) isJobComplete(
 		err	:= r.Get(h.ctx, 
 					types.NamespacedName{
 						Name:	   podName,
-						Namespace: h.directory.Namespace }, job)
+						Namespace: h.directory.Namespace}, job)
 
 		r.Log.V(1).Info("Checking if a job has completed", 
 				r.createLogParams(h, "Job", job)...)
@@ -224,7 +341,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) isPodOpComplete(
 		err	:= r.Get(h.ctx, 
 					types.NamespacedName{
 						Name:	   podName,
-						Namespace: h.directory.Namespace }, pod)
+						Namespace: h.directory.Namespace}, pod)
 
 		r.Log.V(1).Info("Checking if a Pod operation has completed", 
 			r.createLogParams(h, "Wait.For.Start", waitForStart, "Pod", pod)...)
@@ -295,7 +412,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) waitForPod(
 		err = errors.New(fmt.Sprintf("The pod, %s, failed to become ready " +
 				"within the allocated time.", name))
 
-		return 
+		return
 	}
 
 	return
@@ -326,7 +443,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) waitForJob(
 				"The job failed to complete within the allocated time.",
 				r.createLogParams(h, "Job.Name", name)...)
 
-		return 
+		return
 	}
 
 	return
@@ -342,12 +459,12 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 			h          *RequestHandle,
 			podName    string,
 			serverPort int32,
-			pvcName    string) (error) {
+			pvcName    string) error {
 
 	r.Log.V(1).Info("Entering a function", 
 				r.createLogParams(h, "Function", "createClusterService",
-						"Pod.Name", podName, "Port", serverPort,
-						"PVC.Name", pvcName)...)	
+						"Replica.Name", podName, "Port", serverPort,
+						"PVC.Name", pvcName)...)
 
 	/*
 	 * Initialise the service structure.
@@ -361,12 +478,12 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
-			Selector: utils.LabelsForApp(h.directory.Name, pvcName),
+			Selector: utils.LabelsForPod(h.directory.Name, podName, pvcName),
 			Ports:    []corev1.ServicePort{{
 				Name:       podName,
 				Protocol:   corev1.ProtocolTCP,
 				Port:       serverPort,
-				TargetPort: intstr.IntOrString {
+				TargetPort: intstr.IntOrString{
 					Type:   intstr.Int,
 					IntVal: serverPort,
 				},
@@ -380,8 +497,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 	 * Create the service.
 	 */
 
-	r.Log.Info("Creating a new service for the pod", 
-				r.createLogParams(h, "Pod.Name", podName)...)
+	r.Log.Info("Creating a new service for the replica", 
+				r.createLogParams(h, "Replica.Name", podName)...)
 
 	r.Log.V(1).Info("Service details", 
 			r.createLogParams(h, "Service", service)...)
@@ -389,8 +506,8 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createClusterService(
 	err := r.Create(h.ctx, service)
 
 	if err != nil {
- 		r.Log.Error(err, "Failed to create the service for the pod",
-				r.createLogParams(h, "Pod.Name", podName)...)
+ 		r.Log.Error(err, "Failed to create the service for the replica",
+				r.createLogParams(h, "Replica.Name", podName)...)
 
 		return err
 	}

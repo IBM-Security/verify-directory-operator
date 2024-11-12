@@ -9,14 +9,14 @@ package controllers
 /*****************************************************************************/
 
 import (
-	metav1  "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1  "k8s.io/api/core/v1"
+	metav1  "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -40,7 +40,7 @@ const ConfigMapKey = "config.yaml"
 /*****************************************************************************/
 
 /*
- * IBMSecurityVerifyDirectoryReconciler reconciles an 
+ * IBMSecurityVerifyDirectoryReconciler reconciles an
  * IBMSecurityVerifyDirectory object.
  */
 
@@ -268,7 +268,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) Reconcile(
 	 * Set the condition of the document.
 	 */
 
-	r.Log.Info("Reconciled the document", r.createLogParams(&h)...) 
+	r.Log.Info("Reconciled the document", r.createLogParams(&h)...)
 
 	r.setCondition(err, &h, "")
 
@@ -354,7 +354,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getExistingPods(
 
 	opts := []client.ListOption{
 		client.InNamespace(h.req.Namespace),
-		client.MatchingLabels(utils.LabelsForApp(h.req.Name, "")),
+		client.MatchingLabels(utils.LabelsForReplica(h.req.Name, "")),
 	}
 
 	err := r.List(h.ctx, podList, opts...)
@@ -364,11 +364,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getExistingPods(
 						r.createLogParams(h)...)
 	} else {
 		for _, pod := range podList.Items {
-			pods[pod.ObjectMeta.Labels[utils.PVCLabel]] = pod.GetName()
+			pods[pod.ObjectMeta.Labels[utils.PVCLabel]] = pod.Spec.Containers[0].Name
 		}
 	}
 
-	return pods, err 
+	return pods, err
 }
 
 /*****************************************************************************/
@@ -404,7 +404,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) analyseExistingPods(
 	 * replicas which don't appear in the current list of replicas.
 	 */
 
-	for key, _:= range existing {
+	for key, _ := range existing {
 		if _, ok := pvcs[key]; !ok {
 			toBeDeleted = append(toBeDeleted, key)
 		}

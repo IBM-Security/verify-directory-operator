@@ -46,7 +46,7 @@ import (
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) deployProxy(
-			h *RequestHandle) (error) {
+			h *RequestHandle) error {
 
 	r.Log.V(1).Info("Entering a function", 
 				r.createLogParams(h, "Function", "deleteProxy")...)
@@ -127,7 +127,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
  		r.Log.Error(err, "Failed to retrieve the ConfigMap",
 						r.createLogParams(h, "ConfigMap.Name", name)...)
 
-		return 
+		return
 	}
 
 	r.Log.V(1).Info("Retrieved the proxy base configuration.", 
@@ -160,7 +160,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 	/*
 	 * Parse the YAML configuration into a map.  Unfortunately it is not
 	 * easy to parse YAML into a generic structure, and so after we have
-	 * unmarshalled the data we want to iteratively convert the data into 
+	 * unmarshalled the data we want to iteratively convert the data into
 	 * a map of strings.
 	 */
 
@@ -171,7 +171,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 						r.createLogParams(h, "ConfigMap.Name", name,
 								"ConfigMap.Key", key)...)
 
-		return 
+		return
 	}
 
 	body      = utils.ConvertYaml(body)
@@ -183,7 +183,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 		return
 	}
 
-	ldap := utils.GetYamlValue(body, []string{"general","ports","ldap"}, 
+	ldap := utils.GetYamlValue(body, []string{"general", "ports", "ldap"}, 
 						true, h.directory.Namespace)
 
 	r.Log.V(1).Info("Retrieved the proxy LDAP port configuration.", 
@@ -210,7 +210,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) getProxyJson(
 			port = 9636
 
 			ldaps := utils.GetYamlValue(
-							body, []string{"general","ports","ldaps"}, 
+							body, []string{"general", "ports", "ldaps"}, 
 							true, h.directory.Namespace)
 
 			r.Log.V(1).Info("Retrieved the proxy LDAPS port configuration.", 
@@ -301,7 +301,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 	servers.WriteString("]")
 
 	/*
-	 * Create the suffixes entry.  It will look something like the 
+	 * Create the suffixes entry.  It will look something like the
 	 * following:
 	 *   [ { "base": "<suffix>", "name": "split_x", "servers": <servers> } ]
 	 */
@@ -321,7 +321,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 		entry := fmt.Sprintf(
 			"{ \"base\": \"%s\", \"name\": \"split_%d\", \"servers\": %s }", 
 			suffix, idx, servers.String())
-
 
 		suffixes.WriteString(entry)
 	}
@@ -373,7 +372,6 @@ func (r *IBMSecurityVerifyDirectoryReconciler) constructProxyYaml(
 	/*
 	 * Now we can construct the entire JSON document.
 	 */
-
 
 	config := fmt.Sprintf(
 				"%s, \"proxy\": { \"server-groups\": %s, \"suffixes\": %s } }",
@@ -427,7 +425,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 	err        = r.Get(h.ctx, 
 					types.NamespacedName{
 						Name:	   name,
-						Namespace: h.directory.Namespace }, configMap)
+						Namespace: h.directory.Namespace}, configMap)
 
 	if err != nil && ! k8serrors.IsNotFound(err) {
  		r.Log.Error(err, "Failed to retrieve the proxy configuration",
@@ -475,7 +473,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) saveProxyConfig(
 
 /*
  * The following function will create the proxy deployment if it has not already
- * been created, otherwise it will restart the deployment.  
+ * been created, otherwise it will restart the deployment.
  */
 
 func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
@@ -497,7 +495,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 	err     = r.Get(h.ctx, 
 					types.NamespacedName{
 						Name:	   name,
-						Namespace: h.directory.Namespace }, olddep)
+						Namespace: h.directory.Namespace}, olddep)
 
 	if err != nil && ! k8serrors.IsNotFound(err) {
  		r.Log.Error(err, "Failed to retrieve the pod information",
@@ -523,7 +521,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 	 * The port which is exported by the deployment.
 	 */
 
-	ports := []corev1.ContainerPort {{
+	ports := []corev1.ContainerPort{{
 		Name:          "ldap",
 		ContainerPort: port,
 		Protocol:      corev1.ProtocolTCP,
@@ -533,7 +531,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 	 * The volume configuration.
 	 */
 
-	volumes := []corev1.Volume {
+	volumes := []corev1.Volume{
 		{
 			Name: "isvd-proxy-config",
 			VolumeSource: corev1.VolumeSource{
@@ -550,7 +548,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 		},
 	}
 
-	volumeMounts := []corev1.VolumeMount {
+	volumeMounts := []corev1.VolumeMount{
 		{
 			Name:      "isvd-proxy-config",
 			MountPath: "/var/isvd/config",
@@ -563,7 +561,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 	 */
 
 	if h.directory.Spec.Pods.Proxy.PVC != "" {
-		volumes = append(volumes, corev1.Volume {
+		volumes = append(volumes, corev1.Volume{
 			Name: "isvd-proxy-data",
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
@@ -573,7 +571,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 			},
 		})
 
-		volumeMounts = append(volumeMounts, corev1.VolumeMount {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "isvd-proxy-data",
 			MountPath: "/var/isvd/data",
 		})
@@ -584,7 +582,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 	 */
 
 	env := append(h.directory.Spec.Pods.Env, 
-		corev1.EnvVar {
+		corev1.EnvVar{
 			Name: "YAML_CONFIG_FILE",
 			Value: fmt.Sprintf("/var/isvd/config/%s", utils.ProxyCMKey),
 		},
@@ -594,11 +592,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 	 * The liveness, and readiness probe definitions.
 	 */
 
-	livenessProbe := &corev1.Probe {
+	livenessProbe := &corev1.Probe{
 		InitialDelaySeconds: 2,
 		PeriodSeconds:       10,
-		ProbeHandler:        corev1.ProbeHandler {
-			Exec: &corev1.ExecAction {
+		ProbeHandler:        corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
 				Command: []string{
 					"/sbin/health_check.sh",
 					"livenessProbe",
@@ -607,11 +605,11 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 		},
 	}
 
-	readinessProbe := &corev1.Probe {
+	readinessProbe := &corev1.Probe{
 		InitialDelaySeconds: 4,
 		PeriodSeconds:       5,
-		ProbeHandler:        corev1.ProbeHandler {
-			Exec: &corev1.ExecAction {
+		ProbeHandler:        corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
 				Command: []string{
 					"/sbin/health_check.sh",
 				},
@@ -701,13 +699,13 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 				r.Log.Error(err, "Failed to update the proxy deployment",
 						r.createLogParams(h, "Deployment.Name", dep.Name)...)
 
-				return 
+				return
 			}
 		}
 
 		if updated {
 			/*
-			 * The deployment already exists and so we just need to perform a 
+			 * The deployment already exists and so we just need to perform a
 			 * rolling restart.
 			 */
 
@@ -753,13 +751,12 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 			r.Log.Error(err, "Failed to create the proxy deployment",
 						r.createLogParams(h, "Deployment.Name", dep.Name)...)
 
-			return 
+			return
 		}
 
 		/*
 		 * Create the cluster service for the proxy.
 		 */
-
 
 		service := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -774,7 +771,7 @@ func (r *IBMSecurityVerifyDirectoryReconciler) createProxyDeployment(
 					Name:       name,
 					Protocol:   corev1.ProtocolTCP,
 					Port:       port,
-					TargetPort: intstr.IntOrString {
+					TargetPort: intstr.IntOrString{
 						Type:   intstr.Int,
 						IntVal: port,
 					},
